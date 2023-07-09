@@ -1,16 +1,110 @@
-use wgpu::util::DeviceExt;
+use it::{color::Color, point::Point3, vertex::Vertex, vertex_buffer::VertexBuffer};
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vec3 {
-    x: f32,
-    y: f32,
-    z: f32,
+const TRIANGLE_CLIP_SPACE: [Vertex; 3] = [
+    Vertex {
+        position: Point3 {
+            x: 0.5,
+            y: -0.5,
+            z: 0.0,
+        },
+        color: Color {
+            r: 0.1,
+            g: 0.2,
+            b: 0.3,
+            a: 1.0,
+        },
+    },
+    Vertex {
+        position: Point3 {
+            x: 0.0,
+            y: 0.5,
+            z: 0.0,
+        },
+        color: Color {
+            r: 0.3,
+            g: 0.4,
+            b: 0.5,
+            a: 1.0,
+        },
+    },
+    Vertex {
+        position: Point3 {
+            x: -0.5,
+            y: -0.5,
+            z: 0.0,
+        },
+        color: Color {
+            r: 0.5,
+            g: 0.6,
+            b: 0.7,
+            a: 1.0,
+        },
+    },
+];
+
+fn square_clip_space(origin: Point3, side: f32) -> Vec<Vertex> {
+    let side_over_2 = side / 2.0;
+    vec![
+        Vertex {
+            position: origin
+                + Point3 {
+                    x: side_over_2,
+                    y: side_over_2,
+                    z: 0.0,
+                },
+            color: Color::RED,
+        },
+        Vertex {
+            position: origin
+                + Point3 {
+                    x: -side_over_2,
+                    y: side_over_2,
+                    z: 0.0,
+                },
+            color: Color::RED,
+        },
+        Vertex {
+            position: origin
+                + Point3 {
+                    x: -side_over_2,
+                    y: -side_over_2,
+                    z: 0.0,
+                },
+            color: Color::RED,
+        },
+        Vertex {
+            position: origin
+                + Point3 {
+                    x: side_over_2,
+                    y: side_over_2,
+                    z: 0.0,
+                },
+            color: Color::RED,
+        },
+        Vertex {
+            position: origin
+                + Point3 {
+                    x: -side_over_2,
+                    y: -side_over_2,
+                    z: 0.0,
+                },
+            color: Color::RED,
+        },
+        Vertex {
+            position: origin
+                + Point3 {
+                    x: side_over_2,
+                    y: -side_over_2,
+                    z: 0.0,
+                },
+            color: Color::RED,
+        },
+    ]
 }
 
 fn main() {
@@ -69,13 +163,20 @@ fn main() {
             module: &shader_module,
             entry_point: "vertex_main",
             buffers: &[wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<Vec3>() as u64,
+                array_stride: std::mem::size_of::<Vertex>() as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                }],
+                attributes: &[
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x3,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: std::mem::size_of::<Point3>() as u64,
+                        shader_location: 1,
+                    },
+                ],
             }],
         },
         fragment: Some(wgpu::FragmentState {
@@ -102,27 +203,20 @@ fn main() {
         multiview: None,
     });
 
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(&[
-            Vec3 {
+    let mut vertex_buffer = VertexBuffer::new(&device, 1000);
+    vertex_buffer.insert_many(&queue, &TRIANGLE_CLIP_SPACE);
+    vertex_buffer.insert_many(
+        &queue,
+        &square_clip_space(
+            Point3 {
                 x: 0.5,
-                y: -0.5,
-                z: 0.0,
-            },
-            Vec3 {
-                x: 0.0,
                 y: 0.5,
                 z: 0.0,
             },
-            Vec3 {
-                x: -0.5,
-                y: -0.5,
-                z: 0.0,
-            },
-        ]),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
+            0.25,
+        ),
+    );
+    device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -197,8 +291,8 @@ fn main() {
                             });
 
                         render_pass.set_pipeline(&render_pipeline);
-                        render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                        render_pass.draw(0..3, 0..1);
+                        render_pass.set_vertex_buffer(0, vertex_buffer.as_raw_slice());
+                        render_pass.draw(0..vertex_buffer.len() as u32, 0..1);
                     }
 
                     command_encoder.finish()

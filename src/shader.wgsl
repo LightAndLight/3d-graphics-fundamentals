@@ -8,14 +8,14 @@ struct VertexOutput{
   @location(0) color: vec4<f32>
 }
 
+@group(0) @binding(0)
+var<uniform> camera_to_clip: mat4x4<f32>;
+
 @vertex
 fn vertex_main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
   
-  output.position = vec4<f32>(
-    input.position,
-    1.0
-  );
+  output.position = camera_to_clip * vec4<f32>(input.position, 1.0);
   output.color = input.color;
 
   return output;

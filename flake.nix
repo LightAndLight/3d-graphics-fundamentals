@@ -18,8 +18,8 @@
       in {
         devShell =
           pkgs.mkShell {
-            buildInputs = [
-              (pkgs.rust-bin.stable.${rustVersion}.default.override {
+            buildInputs = with pkgs; [
+              (rust-bin.stable.${rustVersion}.default.override {
                 extensions = [
                   "cargo"
                   "clippy"
@@ -28,6 +28,8 @@
                   "rustfmt"
                 ];
               })
+              
+              renderdoc
             ];
             LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
               xorg.libX11

@@ -1,7 +1,11 @@
 use it::{
-    camera::Camera, color::Color, point::Point3, vertex::Vertex, vertex_buffer::VertexBuffer,
+    camera::Camera,
+    color::Color,
+    objects::{ObjectData, ObjectId, Objects},
+    point::Point3,
+    vertex::Vertex,
+    vertex_buffer::VertexBuffer,
 };
-use log::debug;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -9,104 +13,109 @@ use winit::{
     window::Window,
 };
 
-const TRIANGLE_CAMERA_SPACE: [Vertex; 3] = [
-    Vertex {
-        position: Point3 {
-            x: 0.5,
-            y: -0.5,
-            z: 0.0,
+fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
+    vec![
+        Vertex {
+            position: Point3 {
+                x: 0.5,
+                y: -0.5,
+                z: 0.0,
+            },
+            color: Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
+            object_id,
         },
-        color: Color {
-            r: 0.1,
-            g: 0.2,
-            b: 0.3,
-            a: 1.0,
+        Vertex {
+            position: Point3 {
+                x: 0.0,
+                y: 0.5,
+                z: 0.0,
+            },
+            color: Color {
+                r: 0.3,
+                g: 0.4,
+                b: 0.5,
+                a: 1.0,
+            },
+            object_id,
         },
-    },
-    Vertex {
-        position: Point3 {
-            x: 0.0,
-            y: 0.5,
-            z: 0.0,
+        Vertex {
+            position: Point3 {
+                x: -0.5,
+                y: -0.5,
+                z: 0.0,
+            },
+            color: Color {
+                r: 0.5,
+                g: 0.6,
+                b: 0.7,
+                a: 1.0,
+            },
+            object_id,
         },
-        color: Color {
-            r: 0.3,
-            g: 0.4,
-            b: 0.5,
-            a: 1.0,
-        },
-    },
-    Vertex {
-        position: Point3 {
-            x: -0.5,
-            y: -0.5,
-            z: 0.0,
-        },
-        color: Color {
-            r: 0.5,
-            g: 0.6,
-            b: 0.7,
-            a: 1.0,
-        },
-    },
-];
+    ]
+}
 
-fn square_camera_space(origin: Point3, side: f32) -> Vec<Vertex> {
+fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
     let side_over_2 = side / 2.0;
     vec![
         Vertex {
-            position: origin
-                + Point3 {
-                    x: side_over_2,
-                    y: side_over_2,
-                    z: 0.0,
-                },
-            color: Color::RED,
+            position: Point3 {
+                x: side_over_2,
+                y: side_over_2,
+                z: 0.0,
+            },
+            color: Color::GREEN,
+            object_id,
         },
         Vertex {
-            position: origin
-                + Point3 {
-                    x: -side_over_2,
-                    y: side_over_2,
-                    z: 0.0,
-                },
-            color: Color::RED,
+            position: Point3 {
+                x: -side_over_2,
+                y: side_over_2,
+                z: 0.0,
+            },
+            color: Color::GREEN,
+            object_id,
         },
         Vertex {
-            position: origin
-                + Point3 {
-                    x: -side_over_2,
-                    y: -side_over_2,
-                    z: 0.0,
-                },
-            color: Color::RED,
+            position: Point3 {
+                x: -side_over_2,
+                y: -side_over_2,
+                z: 0.0,
+            },
+            color: Color::GREEN,
+            object_id,
         },
         Vertex {
-            position: origin
-                + Point3 {
-                    x: side_over_2,
-                    y: side_over_2,
-                    z: 0.0,
-                },
-            color: Color::RED,
+            position: Point3 {
+                x: side_over_2,
+                y: side_over_2,
+                z: 0.0,
+            },
+            color: Color::GREEN,
+            object_id,
         },
         Vertex {
-            position: origin
-                + Point3 {
-                    x: -side_over_2,
-                    y: -side_over_2,
-                    z: 0.0,
-                },
-            color: Color::RED,
+            position: Point3 {
+                x: -side_over_2,
+                y: -side_over_2,
+                z: 0.0,
+            },
+            color: Color::GREEN,
+            object_id,
         },
         Vertex {
-            position: origin
-                + Point3 {
-                    x: side_over_2,
-                    y: -side_over_2,
-                    z: 0.0,
-                },
-            color: Color::RED,
+            position: Point3 {
+                x: side_over_2,
+                y: -side_over_2,
+                z: 0.0,
+            },
+            color: Color::GREEN,
+            object_id,
         },
     ]
 }
@@ -160,46 +169,78 @@ fn main() {
 
     let shader_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
+    let mut objects = Objects::new(&device, 1000);
     let mut vertex_buffer = VertexBuffer::new(&device, 100000);
-    vertex_buffer.insert_many(&queue, &TRIANGLE_CAMERA_SPACE);
-    vertex_buffer.insert_many(
-        &queue,
-        &square_camera_space(
-            Point3 {
-                x: 0.5,
-                y: 0.5,
-                z: 0.0,
+    {
+        let object_id = objects.insert(
+            &queue,
+            ObjectData {
+                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                    x: -1.0,
+                    y: 0.0,
+                    z: 0.0,
+                })
+                .into(),
             },
-            0.25,
-        ),
-    );
+        );
+        vertex_buffer.insert_many(&queue, &triangle_camera_space(object_id));
+    }
 
-    let (models, _materials) =
-        tobj::load_obj("models/monkey.obj", &tobj::LoadOptions::default()).unwrap();
-    let teapot = &models[0];
+    {
+        let object_id = objects.insert(
+            &queue,
+            ObjectData {
+                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                })
+                .into(),
+            },
+        );
+        vertex_buffer.insert_many(&queue, &square_camera_space(object_id, 0.25));
+    }
 
-    vertex_buffer.insert_many(&queue, &{
-        let mut vertices = Vec::with_capacity(teapot.mesh.indices.len());
+    {
+        let (models, _materials) =
+            tobj::load_obj("models/monkey.obj", &tobj::LoadOptions::default()).unwrap();
+        let teapot = &models[0];
 
-        if teapot.mesh.face_arities.is_empty() {
-            // all faces are triangles
-            for index in teapot.mesh.indices.iter() {
-                let index = *index as usize;
-                vertices.push(Vertex {
-                    position: Point3 {
-                        x: teapot.mesh.positions[3 * index],
-                        y: teapot.mesh.positions[3 * index + 1],
-                        z: teapot.mesh.positions[3 * index + 2],
-                    },
-                    color: Color::RED,
-                });
+        let object_id = objects.insert(
+            &queue,
+            ObjectData {
+                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: -10.0,
+                })
+                .into(),
+            },
+        );
+        vertex_buffer.insert_many(&queue, &{
+            let mut vertices = Vec::with_capacity(teapot.mesh.indices.len());
+
+            if teapot.mesh.face_arities.is_empty() {
+                // all faces are triangles
+                for index in teapot.mesh.indices.iter() {
+                    let index = *index as usize;
+                    vertices.push(Vertex {
+                        position: Point3 {
+                            x: teapot.mesh.positions[3 * index],
+                            y: teapot.mesh.positions[3 * index + 1],
+                            z: teapot.mesh.positions[3 * index + 2],
+                        },
+                        color: Color::RED,
+                        object_id,
+                    });
+                }
+            } else {
+                panic!("mesh is not triangulated");
             }
-        } else {
-            panic!("mesh is not triangulated");
-        }
 
-        vertices
-    });
+            vertices
+        });
+    }
 
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
 
@@ -227,18 +268,52 @@ fn main() {
 
     let camera_move_speed: f32 = 0.05;
 
+    let vertex_buffer_layout = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<Vertex>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x3,
+                offset: 0,
+                shader_location: 0,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                offset: std::mem::size_of::<Point3>() as u64,
+                shader_location: 1,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Uint32,
+                offset: std::mem::size_of::<Point3>() as u64 + std::mem::size_of::<Color>() as u64,
+                shader_location: 2,
+            },
+        ],
+    };
+
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
             },
-            count: None,
-        }],
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
     });
 
     let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -253,22 +328,7 @@ fn main() {
         vertex: wgpu::VertexState {
             module: &shader_module,
             entry_point: "vertex_main",
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<Vertex>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x3,
-                        offset: 0,
-                        shader_location: 0,
-                    },
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x4,
-                        offset: std::mem::size_of::<Point3>() as u64,
-                        shader_location: 1,
-                    },
-                ],
-            }],
+            buffers: &[vertex_buffer_layout],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
@@ -304,14 +364,24 @@ fn main() {
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                buffer: &camera_buffer,
-                offset: 0,
-                size: None,
-            }),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &camera_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: objects.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        ],
     });
 
     let mut w_held = false;

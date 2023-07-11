@@ -7,18 +7,26 @@
   * [x] Basic render pass
   * [x] 2D rendering
   * [x] Camera and perspective
-  * [x] `.obj` model rendering
+  * [x] `.obj` model rendering (vertex positions)
   * [ ] Indexed rendering
-  * [ ] Per-object transformation matrix
+  * [x] Per-object transformation matrix
+  * [ ] Depth testing
 * Light objects using physically-based techniques
 * Add shadows via shadow mapping
 * Use GPU-driven techniques as much as possible
+  * [x] Per-object transformation matrices stored in a single GPU buffer
 
-## Stretch Goals
+## Stretch goals
 
-* Ambient occlusion
-* High dynamic range
-* Bloom
+* [ ] Ambient occlusion
+* [ ] High dynamic range
+* [ ] Bloom
+
+## For fun
+
+* [ ] Parse-less on-disk model format with a program that converts to / from `.obj`
+
+  To load meshes straight from `mmap`ped files.
 
 ## Resources
 

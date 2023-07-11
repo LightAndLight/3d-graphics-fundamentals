@@ -1,6 +1,7 @@
 use it::{
     camera::Camera, color::Color, point::Point3, vertex::Vertex, vertex_buffer::VertexBuffer,
 };
+use log::debug;
 use wgpu::util::DeviceExt;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -159,7 +160,7 @@ fn main() {
 
     let shader_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-    let mut vertex_buffer = VertexBuffer::new(&device, 1000);
+    let mut vertex_buffer = VertexBuffer::new(&device, 100000);
     vertex_buffer.insert_many(&queue, &TRIANGLE_CAMERA_SPACE);
     vertex_buffer.insert_many(
         &queue,
@@ -172,6 +173,34 @@ fn main() {
             0.25,
         ),
     );
+
+    let (models, _materials) =
+        tobj::load_obj("models/monkey.obj", &tobj::LoadOptions::default()).unwrap();
+    let teapot = &models[0];
+
+    vertex_buffer.insert_many(&queue, &{
+        let mut vertices = Vec::with_capacity(teapot.mesh.indices.len());
+
+        if teapot.mesh.face_arities.is_empty() {
+            // all faces are triangles
+            for index in teapot.mesh.indices.iter() {
+                let index = *index as usize;
+                vertices.push(Vertex {
+                    position: Point3 {
+                        x: teapot.mesh.positions[3 * index],
+                        y: teapot.mesh.positions[3 * index + 1],
+                        z: teapot.mesh.positions[3 * index + 2],
+                    },
+                    color: Color::RED,
+                });
+            }
+        } else {
+            panic!("mesh is not triangulated");
+        }
+
+        vertices
+    });
+
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
 
     let mut camera = Camera {

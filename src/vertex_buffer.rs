@@ -39,7 +39,11 @@ impl VertexBuffer {
 
     pub fn insert_many(&mut self, queue: &wgpu::Queue, vertices: &[Vertex]) {
         let vertices_len = vertices.len() as u64;
-        assert!(self.size + vertices_len < self.capacity);
+        assert!(
+            self.size + vertices_len < self.capacity,
+            "vertex buffer exceeded allocated capacity of {} `Vertex`s",
+            self.capacity
+        );
         queue.write_buffer(
             &self.buffer,
             self.size * std::mem::size_of::<Vertex>() as u64,

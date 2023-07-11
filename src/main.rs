@@ -322,6 +322,8 @@ fn main() {
         push_constant_ranges: &[],
     });
 
+    let depth_texture_format = wgpu::TextureFormat::Depth16Unorm;
+
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&render_pipeline_layout),
@@ -348,7 +350,27 @@ fn main() {
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: None,
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: depth_texture_format,
+            // If this is disabled then depth testing won't happen.
+            depth_write_enabled: true,
+            /*
+            WebGPU doesn't specify a Z direction for NDC:
+            <https://www.reddit.com/r/wgpu/comments/tilvas/is_your_wgpu_world_left_or_right_handed/iykwrp0/>
+
+            The Z direction is implied by the projection matrix, and the depth test needs to bet
+            configured to match. If the projection matrix makes objects with high Z smaller (left-handed coordinates / "+Z in"),
+            then the closest fragment is the one with the smallest Z, which means we need to
+            clear to 1.0 (max Z / far plane) and use the `Less` comparison.
+
+            Conversely, if the projection matrix made objects with low Z smaller (right-handed / "+Z out"),
+            then we'd need to clear to 0.0 (min Z / far plane) and use the `Greater` comparison.
+            */
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            // What's depth bias?
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState::default(),
         // What's a multiview render pass?
         multiview: None,
@@ -388,6 +410,32 @@ fn main() {
     let mut a_held = false;
     let mut s_held = false;
     let mut d_held = false;
+
+    let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("depth_texture"),
+        // TODO: recreate this texture when window is resized.
+        size: wgpu::Extent3d {
+            width: surface_config.width,
+            height: surface_config.height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: depth_texture_format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor {
+        label: Some("depth_texture_view"),
+        format: None,
+        dimension: None,
+        aspect: wgpu::TextureAspect::DepthOnly,
+        base_mip_level: 0,
+        mip_level_count: None,
+        base_array_layer: 0,
+        array_layer_count: None,
+    });
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -540,7 +588,17 @@ fn main() {
                                         store: true,
                                     },
                                 })],
-                                depth_stencil_attachment: None,
+                                depth_stencil_attachment: Some(
+                                    wgpu::RenderPassDepthStencilAttachment {
+                                        view: &depth_texture_view,
+                                        depth_ops: Some(wgpu::Operations {
+                                            load: wgpu::LoadOp::Clear(1.0),
+                                            // What effect does this have? Is it overwritten by `depth_write_enabled`?
+                                            store: false,
+                                        }),
+                                        stencil_ops: None,
+                                    },
+                                ),
                             });
 
                         render_pass.set_pipeline(&render_pipeline);

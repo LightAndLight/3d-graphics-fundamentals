@@ -2,19 +2,19 @@
 
 ## Goals
 
-* Relearn GPU programming
-* Render simple 3D objects in perspective
+* Remember GPU programming
   * [x] Basic render pass
   * [x] 2D rendering
+* Render simple 3D objects in perspective
   * [x] Camera and perspective
   * [x] `.obj` model rendering (vertex positions)
-  * [ ] Indexed rendering
   * [x] Per-object transformation matrix
-  * [ ] Depth testing
+  * [x] Depth testing
 * Light objects using physically-based techniques
 * Add shadows via shadow mapping
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
+  * [ ] `draw_indirect`
 
 ## Stretch goals
 
@@ -25,6 +25,9 @@
 ## For fun
 
 * [ ] Parse-less on-disk model format with a program that converts to / from `.obj`
+* [ ] Render the depth buffer on screen
+* Performance improvements
+  * [ ] Indexed draws
 
   To load meshes straight from `mmap`ped files.
 

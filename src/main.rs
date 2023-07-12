@@ -1,6 +1,7 @@
 use it::{
     camera::Camera,
     color::Color,
+    light::{DirectionalLight, PointLight},
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
     vector::Vec3,
@@ -32,7 +33,7 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
         Vertex {
@@ -51,7 +52,7 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
         Vertex {
@@ -70,7 +71,7 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
     ]
@@ -90,7 +91,7 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
         Vertex {
@@ -104,7 +105,7 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
         Vertex {
@@ -118,7 +119,7 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
         Vertex {
@@ -132,7 +133,7 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
         Vertex {
@@ -146,7 +147,7 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
         Vertex {
@@ -160,7 +161,7 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
-                z: -1.0,
+                z: 1.0,
             },
         },
     ]
@@ -282,7 +283,12 @@ fn main() {
                             y: teapot.mesh.positions[3 * index + 1],
                             z: teapot.mesh.positions[3 * index + 2],
                         },
-                        color: Color::RED,
+                        color: Color {
+                            r: 1.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        },
                         object_id,
                         normal: Vec3 {
                             x: teapot.mesh.normals[3 * index],
@@ -300,30 +306,6 @@ fn main() {
     }
 
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
-
-    let mut camera = Camera {
-        eye: cgmath::Point3 {
-            x: 0.0,
-            y: 0.0,
-            z: 1.0,
-        },
-        target: cgmath::Point3 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        },
-        up: cgmath::Vector3 {
-            x: 0.0,
-            y: 1.0,
-            z: 0.0,
-        },
-        aspect: surface_config.width as f32 / surface_config.height as f32,
-        fovy: 45.0,
-        near: 0.1,
-        far: 100.0,
-    };
-
-    let camera_move_speed: f32 = 0.05;
 
     let vertex_buffer_layout = wgpu::VertexBufferLayout {
         array_stride: std::mem::size_of::<Vertex>() as u64,
@@ -357,9 +339,10 @@ fn main() {
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
         entries: &[
+            // camera
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -367,9 +350,10 @@ fn main() {
                 },
                 count: None,
             },
+            // objects
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
@@ -377,11 +361,34 @@ fn main() {
                 },
                 count: None,
             },
+            // display_normals
             wgpu::BindGroupLayoutEntry {
                 binding: 2,
-                visibility: wgpu::ShaderStages::VERTEX,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // point_lights
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // directional_lights
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -450,10 +457,32 @@ fn main() {
         multiview: None,
     });
 
+    let mut camera = Camera {
+        eye: cgmath::Point3 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        },
+        target: cgmath::Point3 {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        up: cgmath::Vector3 {
+            x: 0.0,
+            y: 1.0,
+            z: 0.0,
+        },
+        aspect: surface_config.width as f32 / surface_config.height as f32,
+        fovy: 45.0,
+        near: 0.1,
+        far: 100.0,
+    };
+    let camera_move_speed: f32 = 0.05;
     let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("camera_to_clip"),
+        label: Some("camera"),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        contents: bytemuck::cast_slice(&[camera.clip_coordinates_matrix()]),
+        contents: bytemuck::cast_slice(&[camera.to_uniform()]),
     });
     let mut camera_updated = false;
 
@@ -464,6 +493,43 @@ fn main() {
         contents: bytemuck::cast_slice(&[if display_normals { 1 } else { 0 } as u32]),
     });
     let mut display_normals_updated = false;
+
+    let point_light_id = objects.insert(
+        &queue,
+        ObjectData {
+            transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                x: 2.0,
+                y: -2.0,
+                z: -2.0,
+            })
+            .into(),
+        },
+    );
+    let point_lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("point_lights"),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        contents: bytemuck::cast_slice(&[PointLight {
+            object_id: point_light_id,
+            _padding0: [0, 0, 0],
+            color: Color::BLUE,
+            intensity: 1.0,
+            _padding1: [0, 0, 0],
+        }]),
+    });
+
+    let directional_lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("directional_lights"),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        contents: bytemuck::cast_slice(&[DirectionalLight {
+            color: Color::WHITE,
+            direction: Vec3 {
+                x: 1.0,
+                y: -1.0,
+                z: -0.2,
+            },
+            _padding: 0,
+        }]),
+    });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
@@ -489,6 +555,22 @@ fn main() {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &display_normals_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &point_lights_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &directional_lights_buffer,
                     offset: 0,
                     size: None,
                 }),
@@ -639,7 +721,7 @@ fn main() {
                     queue.write_buffer(
                         &camera_buffer,
                         0,
-                        bytemuck::cast_slice(&[camera.clip_coordinates_matrix()]),
+                        bytemuck::cast_slice(&[camera.to_uniform()]),
                     );
                     camera_updated = false;
                 }

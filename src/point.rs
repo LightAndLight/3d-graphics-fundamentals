@@ -27,3 +27,13 @@ impl Add for Point3 {
         }
     }
 }
+
+impl From<cgmath::Point3<f32>> for Point3 {
+    fn from(value: cgmath::Point3<f32>) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+            z: value.z,
+        }
+    }
+}

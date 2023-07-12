@@ -1,5 +1,6 @@
 pub mod camera;
 pub mod color;
+pub mod light;
 pub mod matrix;
 pub mod objects;
 pub mod point;

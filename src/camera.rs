@@ -1,4 +1,4 @@
-use crate::matrix::Matrix4;
+use crate::{matrix::Matrix4, point::Point3};
 
 pub struct Camera {
     /// The camera's position.
@@ -56,4 +56,26 @@ impl Camera {
 
         Matrix4::from(OPENGL_TO_WGPU_MATRIX * perspective * view)
     }
+
+    pub fn to_uniform(&self) -> CameraUniform {
+        CameraUniform {
+            eye: self.eye.into(),
+            _padding: 0,
+            view_proj: self.clip_coordinates_matrix(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    pub eye: Point3,
+    /**
+    See:
+
+    * <https://sotrh.github.io/learn-wgpu/showcase/alignment/>
+    * <https://sotrh.github.io/learn-wgpu/intermediate/tutorial10-lighting/#the-blinn-phong-model>
+    */
+    pub _padding: u32,
+    pub view_proj: Matrix4,
 }

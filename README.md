@@ -12,6 +12,8 @@
   * [x] Depth testing
 * Light objects using physically-based techniques
   * [x] Include vertex normals
+  * [x] Punctual and directional lights with diffuse reflectance
+  * [ ] Specular reflectance for punctual and directional lights
 * Add shadows via shadow mapping
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
@@ -22,6 +24,7 @@
 * [ ] Ambient occlusion
 * [ ] High dynamic range
 * [ ] Bloom
+* [ ] Area lights
 
 ## For fun
 
@@ -44,7 +47,7 @@
     * <https://blog.selfshadow.com/publications/s2013-shading-course/hoffman/s2013_pbs_physics_math_notes.pdf>
   * <https://www.realtimerendering.com/>
     * Chapter 9
-* 
+  * Realtime area lights: <https://eheitzresearch.wordpress.com/415-2/>
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>
   * <http://graphics.stanford.edu/data/3Dscanrep/>

@@ -87,14 +87,58 @@ fn falloff(intensity: f32, distance: f32) -> f32 {
   return pow(intensity / distance, 2.0);
 }
 
+fn diffuse_brdf(albedo: vec3<f32>, _light_direction: vec3<f32>, _view_direction: vec3<f32>) -> vec3<f32> {
+  return albedo / PI;
+}
+
+fn schlick(light_direction: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+  let f0 = vec3<f32>(0.05);
+  return f0 + (1.0 - f0) * pow(1.0 - dot(normal, light_direction), 5.0);
+}
+
+fn distribution(alpha: f32, normal: vec3<f32>, half_vector: vec3<f32>) -> f32 {
+  let alpha_squared = pow(alpha, 2.0);
+  let n_dot_h = max(dot(normal, half_vector), 0.0);
+  return 
+    alpha_squared
+    /
+    PI * pow(pow(n_dot_h, 2.0) * (alpha_squared - 1.0) + 1.0, 2.0);
+}
+
+fn g1(normal: vec3<f32>, k: f32, v: vec3<f32>) -> f32 {
+  let n_dot_v = max(dot(normal, v), 0.0);
+  return n_dot_v / (n_dot_v * (1.0 - k) + k);
+}
+
+fn geometry(roughness: f32, normal: vec3<f32>, light_direction: vec3<f32>, view_direction: vec3<f32>) -> f32 {
+  let k = pow(roughness + 1.0, 2.0) / 8.0;
+  return g1(normal, k, light_direction) * g1(normal, k, view_direction);
+}
+
+fn brdf(normal: vec3<f32>, albedo: vec3<f32>, roughness: f32, light_direction: vec3<f32>, view_direction: vec3<f32>) -> vec3<f32> {
+  let half_vector = (light_direction + view_direction) / length(light_direction + view_direction);
+  
+  let fresnel_reflectance = schlick(light_direction, half_vector);
+
+  let alpha = pow(roughness, 2.0);
+
+  return 
+    (1.0 - fresnel_reflectance) * diffuse_brdf(albedo, light_direction, view_direction)
+    + 
+    fresnel_reflectance * geometry(roughness, normal, light_direction, view_direction) * distribution(alpha, normal, half_vector) / 
+    (4.0 * dot(normal, light_direction) * dot(normal, view_direction));
+}
+
 @fragment
 fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
   if display_normals == 1u {
     return input.color;
   } else {
     var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+
+    let roughness = 0.3;
  
-    let view_direction = camera.eye - input.world_position;
+    let view_direction = normalize(camera.eye - input.world_position);
       
     for (var i: u32 = 0u; i < arrayLength(&point_lights); i++) {
       let point_light = point_lights[i];
@@ -102,20 +146,19 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
       // TODO: don't recalculate this for every fragment.
       let point_light_position: vec4<f32> = objects[point_light.object_id].transform * vec4<f32>(0.0, 0.0, 0.0, 1.0);
 
-      let light_direction: vec3<f32> = (point_light_position.xyz / point_light_position.w) - input.world_position; 
+      let light_direction: vec3<f32> = normalize((point_light_position.xyz / point_light_position.w) - input.world_position); 
       let distance_to_light = length(light_direction);
 
-      /*
       radiance +=
         PI *
-        (albedo / PI) * // Lambertian BRDF
-        point_light.color * falloff(distance_to_light) *
-        max(dot(input.normal, light_direction), 0.0);
-      
-      Simplifies to:
-      */
-      radiance +=
-        input.color.rgb *
+        brdf(
+          input.normal,
+          input.color.rgb,
+          roughness,
+          // normalising these directions is important
+          light_direction,
+          view_direction
+        ) *
         point_light.color.rgb * falloff(point_light.intensity, distance_to_light) *
         max(dot(input.normal, light_direction), 0.0);
     }
@@ -126,7 +169,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
       let light_direction: vec3<f32> = -directional_light.direction; 
 
       radiance +=
-        input.color.rgb *
+        PI *
+        brdf(input.normal, input.color.rgb, roughness, light_direction, view_direction) *
         directional_light.color.rgb *
         max(dot(input.normal, light_direction), 0.0);
     }

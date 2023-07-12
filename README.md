@@ -10,11 +10,13 @@
   * [x] `.obj` model rendering (vertex positions)
   * [x] Per-object transformation matrix
   * [x] Depth testing
+  * [ ] Compute vertex normals when missing from `.obj` files
 * Light objects using physically-based techniques
   * [x] Include vertex normals
   * [x] Punctual and directional lights with diffuse reflectance
-  * [ ] Specular reflectance for punctual and directional lights
-* Add shadows via shadow mapping
+  * [ ] Specular reflectance for punctual and directional lights (not quite working)
+* [ ] Self-shadowing
+* [ ] Add shadows via shadow mapping
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
   * [ ] `draw_indirect`

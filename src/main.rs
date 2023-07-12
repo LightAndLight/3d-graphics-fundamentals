@@ -285,8 +285,8 @@ fn main() {
                         },
                         color: Color {
                             r: 1.0,
-                            g: 0.0,
-                            b: 0.0,
+                            g: 0.001,
+                            b: 0.001,
                             a: 1.0,
                         },
                         object_id,
@@ -511,8 +511,13 @@ fn main() {
         contents: bytemuck::cast_slice(&[PointLight {
             object_id: point_light_id,
             _padding0: [0, 0, 0],
-            color: Color::BLUE,
-            intensity: 1.0,
+            color: Color {
+                r: 0.0,
+                g: 0.3,
+                b: 1.0,
+                a: 1.0,
+            },
+            intensity: 3.0,
             _padding1: [0, 0, 0],
         }]),
     });

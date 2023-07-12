@@ -11,6 +11,7 @@
   * [x] Per-object transformation matrix
   * [x] Depth testing
 * Light objects using physically-based techniques
+  * [x] Include vertex normals
 * Add shadows via shadow mapping
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
@@ -33,10 +34,17 @@
 
 ## Resources
 
-* GPU programming fundamentals
+* Graphics programming on GPUs
   * <https://zdgeier.com/wgpuintro.html> - `wgpu` / `WGSL`
   * <https://sotrh.github.io/learn-wgpu/> - `wgpu` / `WGSL`
   * <https://vkguide.dev/> - `vulkan` / `GLSL`
+  * <https://learnopengl.com/> `opengl` / `GLSL`
+* Physically based shading
+  * <https://blog.selfshadow.com/publications/>
+    * <https://blog.selfshadow.com/publications/s2013-shading-course/hoffman/s2013_pbs_physics_math_notes.pdf>
+  * <https://www.realtimerendering.com/>
+    * Chapter 9
+* 
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>
   * <http://graphics.stanford.edu/data/3Dscanrep/>

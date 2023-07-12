@@ -3,6 +3,7 @@ use it::{
     color::Color,
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
+    vector::Vec3,
     vertex::Vertex,
     vertex_buffer::VertexBuffer,
 };
@@ -28,6 +29,11 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
                 a: 1.0,
             },
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
         Vertex {
             position: Point3 {
@@ -42,6 +48,11 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
                 a: 1.0,
             },
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
         Vertex {
             position: Point3 {
@@ -56,6 +67,11 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
                 a: 1.0,
             },
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
     ]
 }
@@ -71,6 +87,11 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             },
             color: Color::GREEN,
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
         Vertex {
             position: Point3 {
@@ -80,6 +101,11 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             },
             color: Color::GREEN,
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
         Vertex {
             position: Point3 {
@@ -89,6 +115,11 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             },
             color: Color::GREEN,
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
         Vertex {
             position: Point3 {
@@ -98,6 +129,11 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             },
             color: Color::GREEN,
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
         Vertex {
             position: Point3 {
@@ -107,6 +143,11 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             },
             color: Color::GREEN,
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
         Vertex {
             position: Point3 {
@@ -116,6 +157,11 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
             },
             color: Color::GREEN,
             object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: -1.0,
+            },
         },
     ]
 }
@@ -202,8 +248,14 @@ fn main() {
     }
 
     {
-        let (models, _materials) =
-            tobj::load_obj("models/monkey.obj", &tobj::LoadOptions::default()).unwrap();
+        let (models, _materials) = tobj::load_obj(
+            "models/monkey.obj",
+            &tobj::LoadOptions {
+                single_index: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let teapot = &models[0];
 
         let object_id = objects.insert(
@@ -232,6 +284,11 @@ fn main() {
                         },
                         color: Color::RED,
                         object_id,
+                        normal: Vec3 {
+                            x: teapot.mesh.normals[3 * index],
+                            y: teapot.mesh.normals[3 * index + 1],
+                            z: teapot.mesh.normals[3 * index + 2],
+                        },
                     });
                 }
             } else {
@@ -287,6 +344,13 @@ fn main() {
                 offset: std::mem::size_of::<Point3>() as u64 + std::mem::size_of::<Color>() as u64,
                 shader_location: 2,
             },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x3,
+                offset: std::mem::size_of::<Point3>() as u64
+                    + std::mem::size_of::<Color>() as u64
+                    + std::mem::size_of::<ObjectId>() as u64,
+                shader_location: 3,
+            },
         ],
     };
 
@@ -308,6 +372,16 @@ fn main() {
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -383,6 +457,14 @@ fn main() {
     });
     let mut camera_updated = false;
 
+    let mut display_normals = false;
+    let display_normals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("display_normals"),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        contents: bytemuck::cast_slice(&[if display_normals { 1 } else { 0 } as u32]),
+    });
+    let mut display_normals_updated = false;
+
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
@@ -399,6 +481,14 @@ fn main() {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: objects.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &display_normals_buffer,
                     offset: 0,
                     size: None,
                 }),
@@ -497,6 +587,12 @@ fn main() {
                                     d_held = false;
                                 }
                             },
+                            VirtualKeyCode::N => {
+                                if let ElementState::Pressed = input.state {
+                                    display_normals = !display_normals;
+                                    display_normals_updated = true;
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -546,6 +642,15 @@ fn main() {
                         bytemuck::cast_slice(&[camera.clip_coordinates_matrix()]),
                     );
                     camera_updated = false;
+                }
+
+                if display_normals_updated {
+                    queue.write_buffer(
+                        &display_normals_buffer,
+                        0,
+                        bytemuck::cast_slice(&[if display_normals { 1 } else { 0 } as u32]),
+                    );
+                    display_normals_updated = false;
                 }
 
                 let surface_texture = surface.get_current_texture().unwrap();

@@ -15,7 +15,8 @@ fn get_object(objects: array<ObjectData>, object_id: ObjectId) -> ObjectData {
 struct VertexInput{
   @location(0) position: vec3<f32>,
   @location(1) color: vec4<f32>,
-  @location(2) object_id: u32
+  @location(2) object_id: u32,
+  @location(3) normal: vec3<f32>
 }
 
 struct VertexOutput{
@@ -33,12 +34,20 @@ struct ObjectData{
 @group(0) @binding(1)
 var<storage, read> objects: array<ObjectData>;
 
+@group(0) @binding(2)
+var<uniform> display_normals: u32; // Apparently booleans aren't host-mappable?
+
 @vertex
 fn vertex_main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
   
   output.position = camera_to_clip * objects[input.object_id].transform * vec4<f32>(input.position, 1.0);
-  output.color = input.color;
+
+  if display_normals == 1u {
+    output.color = vec4<f32>(input.normal, 1.0);
+  } else {
+    output.color = input.color;
+  }
 
   return output;
 }

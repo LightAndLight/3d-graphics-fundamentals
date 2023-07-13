@@ -410,7 +410,18 @@ fn main() {
         push_constant_ranges: &[],
     });
 
-    let depth_texture_format = wgpu::TextureFormat::Depth16Unorm;
+    /*
+    A floating point depth buffer is pretty important for working with a high `camera.near` to
+    `camera.far` ratio.
+
+    This fixed some weird popping in/out I was getting on certain not-close geometry.
+
+    See:
+    * <https://www.khronos.org/opengl/wiki/Depth_Buffer_Precision>
+    * <http://www.humus.name/index.php?ID=255>
+    * <https://outerra.blogspot.com/2012/11/maximizing-depth-buffer-range-and.html>
+    */
+    let depth_texture_format = wgpu::TextureFormat::Depth32Float;
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,

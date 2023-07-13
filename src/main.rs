@@ -518,7 +518,7 @@ fn main() {
             transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
                 x: 2.0,
                 y: -2.0,
-                z: -2.0,
+                z: -10.0,
             })
             .into(),
         },

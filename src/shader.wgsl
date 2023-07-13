@@ -97,40 +97,62 @@ fn schlick(light_direction: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
   return f0 + (1.0 - f0) * pow(1.0 - max(dot(normal, light_direction), 0.0), 5.0);
 }
 
+fn is_positive(x: f32) -> f32 {
+  if x <= 0.0 {
+    return 0.0;
+  } else {
+    return 1.0;
+  }
+}
+
 fn distribution(alpha: f32, normal: vec3<f32>, half_vector: vec3<f32>) -> f32 {
   let alpha_squared = alpha * alpha;
-  let n_dot_h = max(dot(normal, half_vector), 0.0);
+  let n_dot_h = max(dot(normal, half_vector), 0.00001);
+  let n_dot_h_2 = n_dot_h * n_dot_h;
   return 
-    alpha_squared
+    alpha_squared * is_positive(n_dot_h)
     /
-    (PI * pow(pow(n_dot_h, 2.0) * (alpha_squared - 1.0) + 1.0, 2.0));
+    (PI * pow(n_dot_h, 4.0) * pow(alpha_squared + (1.0 / n_dot_h_2 - 1.0), 2.0));
 }
 
-fn g1(alpha: f32, normal: vec3<f32>, v: vec3<f32>) -> f32 {
-  let n_dot_v = max(dot(normal, v), 0.0);
+fn g1(alpha: f32, normal: vec3<f32>, v: vec3<f32>, h: vec3<f32>) -> f32 {
+  let n_dot_v = max(dot(normal, v), 0.00001);
+  let n_dot_v_2 = n_dot_v * n_dot_v;
   let alpha_squared = alpha * alpha;
   return 
-    2.0 * n_dot_v 
+    is_positive(dot(v, h) / n_dot_v) * 2.0
     /
-    (n_dot_v + sqrt(alpha_squared + (1.0 - alpha_squared) * pow(n_dot_v, 2.0)));
+    (1.0 + sqrt(1.0 + alpha_squared * (1.0 / n_dot_v_2 - 1.0)));
 }
 
-fn geometry(alpha: f32, normal: vec3<f32>, light_direction: vec3<f32>, view_direction: vec3<f32>) -> f32 {
-  return g1(alpha, normal, light_direction) * g1(alpha, normal, view_direction);
+fn geometry(alpha: f32, normal: vec3<f32>, light_direction: vec3<f32>, view_direction: vec3<f32>, h: vec3<f32>) -> f32 {
+  return g1(alpha, normal, light_direction, h) * g1(alpha, normal, view_direction, h);
 }
+
+/* `distribution` and `geometry` are the GGX microfacet normal distribution and geometric attenuation functions
+straight out of [1]. The original GGX functions are written in terms of `cos` and `tan^2`, which can be calculated
+using the dot product of unit vectors, and `1 / dot(...)^2 - 1` (`tan^2(theta) = 1 / cos^2(theta) - 1`).
+
+Versions that appear in the wild, such as in <http://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html>,
+are optimised and written to avoid unnecessary divides-by-zero, so they take a slightly different form.
+
+[1]: Walter, B., Marschner, S. R., Li, H., & Torrance, K. E. (2007, June).
+    Microfacet models for refraction through rough surfaces.
+    In Proceedings of the 18th Eurographics conference on Rendering Techniques (pp. 195-206).
+*/
 
 fn brdf(normal: vec3<f32>, albedo: vec3<f32>, roughness: f32, light_direction: vec3<f32>, view_direction: vec3<f32>) -> vec3<f32> {
-  let half_vector = (light_direction + view_direction) / length(light_direction + view_direction);
+  let half_vector = normalize(light_direction + view_direction);
   
   let alpha = pow(roughness, 2.0);
 
   let f = schlick(light_direction, half_vector);
-  let g = geometry(alpha, normal, light_direction, view_direction);
+  let g = geometry(alpha, normal, light_direction, view_direction, half_vector);
   let d = distribution(alpha, normal, half_vector);
   let specular = 
     f * g * d
     / 
-    (4.0 * max(dot(normal, light_direction), 0.0) * max(dot(normal, view_direction), 0.0) + 0.0001);
+    (4.0 * max(dot(normal, light_direction), 0.00001) * max(dot(normal, view_direction), 0.00001));
 
   let diffuse = (1.0 - f) * diffuse_brdf(albedo, light_direction, view_direction);
 
@@ -161,7 +183,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
   } else {
     var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
-    let roughness = 0.7;
+    let roughness = 0.4;
  
     let view_direction = normalize(camera.eye - input.world_position);
 

@@ -15,7 +15,7 @@
   * [x] Include vertex normals
   * [x] Punctual and directional lights with diffuse reflectance
   * [x] Specular reflectance for dielectric materials
-  * [ ] Per-object materials
+  * [ ] Per-object materials parameters
   * [ ] Metallic materials
 * [ ] Self-shadowing
 * [ ] Add shadows via shadow mapping
@@ -59,7 +59,9 @@
     * Chapter 9 - Physically Based Shading
   * <https://google.github.io/filament/Filament.html> - explanations of physically based rendering
     in the context of Google's [Filament](https://google.github.io/filament/) engine
-  * Realtime area lights: <https://eheitzresearch.wordpress.com/415-2/>
+  * Production implementations
+    * Blender - <https://github.com/blender/blender/blob/main/source/blender/draw/engines/eevee/shaders/bsdf_common_lib.glsl>
+    * Disney - <https://github.com/wdas/brdf/blob/main/src/brdfs/disney.brdf>
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>
   * <http://graphics.stanford.edu/data/3Dscanrep/>

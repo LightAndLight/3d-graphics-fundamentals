@@ -62,14 +62,15 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
   output.world_position = world_position.xyz / world_position.w;
   output.position = camera.view_proj * world_position;
 
+  // Nothing told me that I was forgetting to attach normals!
+  // The normal can only get passed through for translations.
+  output.normal = input.normal;
+
   if display_normals == 1u {
-    output.color = vec4<f32>(input.normal, 1.0);
+    output.color = vec4<f32>(output.normal, 1.0);
   } else {
     output.color = input.color;
   }
-
-  // Nothing told me that I was forgetting to attach normals!
-  output.normal = input.normal;
 
   return output;
 }
@@ -92,41 +93,65 @@ fn diffuse_brdf(albedo: vec3<f32>, _light_direction: vec3<f32>, _view_direction:
 }
 
 fn schlick(light_direction: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-  let f0 = vec3<f32>(0.05);
-  return f0 + (1.0 - f0) * pow(1.0 - dot(normal, light_direction), 5.0);
+  let f0 = vec3<f32>(0.04);
+  return f0 + (1.0 - f0) * pow(1.0 - max(dot(normal, light_direction), 0.0), 5.0);
 }
 
 fn distribution(alpha: f32, normal: vec3<f32>, half_vector: vec3<f32>) -> f32 {
-  let alpha_squared = pow(alpha, 2.0);
+  let alpha_squared = alpha * alpha;
   let n_dot_h = max(dot(normal, half_vector), 0.0);
   return 
     alpha_squared
     /
-    PI * pow(pow(n_dot_h, 2.0) * (alpha_squared - 1.0) + 1.0, 2.0);
+    (PI * pow(pow(n_dot_h, 2.0) * (alpha_squared - 1.0) + 1.0, 2.0));
 }
 
-fn g1(normal: vec3<f32>, k: f32, v: vec3<f32>) -> f32 {
+fn g1(alpha: f32, normal: vec3<f32>, v: vec3<f32>) -> f32 {
   let n_dot_v = max(dot(normal, v), 0.0);
-  return n_dot_v / (n_dot_v * (1.0 - k) + k);
+  let alpha_squared = alpha * alpha;
+  return 
+    2.0 * n_dot_v 
+    /
+    (n_dot_v + sqrt(alpha_squared + (1.0 - alpha_squared) * pow(n_dot_v, 2.0)));
 }
 
-fn geometry(roughness: f32, normal: vec3<f32>, light_direction: vec3<f32>, view_direction: vec3<f32>) -> f32 {
-  let k = pow(roughness + 1.0, 2.0) / 8.0;
-  return g1(normal, k, light_direction) * g1(normal, k, view_direction);
+fn geometry(alpha: f32, normal: vec3<f32>, light_direction: vec3<f32>, view_direction: vec3<f32>) -> f32 {
+  return g1(alpha, normal, light_direction) * g1(alpha, normal, view_direction);
 }
 
 fn brdf(normal: vec3<f32>, albedo: vec3<f32>, roughness: f32, light_direction: vec3<f32>, view_direction: vec3<f32>) -> vec3<f32> {
   let half_vector = (light_direction + view_direction) / length(light_direction + view_direction);
   
-  let fresnel_reflectance = schlick(light_direction, half_vector);
-
   let alpha = pow(roughness, 2.0);
 
-  return 
-    (1.0 - fresnel_reflectance) * diffuse_brdf(albedo, light_direction, view_direction)
-    + 
-    fresnel_reflectance * geometry(roughness, normal, light_direction, view_direction) * distribution(alpha, normal, half_vector) / 
-    (4.0 * dot(normal, light_direction) * dot(normal, view_direction));
+  let f = schlick(light_direction, half_vector);
+  let g = geometry(alpha, normal, light_direction, view_direction);
+  let d = distribution(alpha, normal, half_vector);
+  let specular = 
+    f * g * d
+    / 
+    (4.0 * max(dot(normal, light_direction), 0.0) * max(dot(normal, view_direction), 0.0) + 0.0001);
+
+  let diffuse = (1.0 - f) * diffuse_brdf(albedo, light_direction, view_direction);
+
+  return diffuse + specular;
+}
+
+fn srgb_to_linear_scalar(srgb: f32) -> f32 {
+  if srgb <= 0.04045 {
+    return srgb / 12.92;
+  } else {
+    return pow((srgb + 0.055) / 1.055, 2.4);
+  }
+}
+
+fn srgb_to_linear(srgb: vec4<f32>) -> vec4<f32> {
+  return vec4<f32>(
+    srgb_to_linear_scalar(srgb.r),
+    srgb_to_linear_scalar(srgb.g),
+    srgb_to_linear_scalar(srgb.b),
+    srgb.a
+  );
 }
 
 @fragment
@@ -136,9 +161,14 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
   } else {
     var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
-    let roughness = 0.3;
+    let roughness = 0.7;
  
     let view_direction = normalize(camera.eye - input.world_position);
+
+    let albedo = srgb_to_linear(input.color);
+
+    // the interpolated vertex normals won't be normalised.
+    let surface_normal = normalize(input.normal);
       
     for (var i: u32 = 0u; i < arrayLength(&point_lights); i++) {
       let point_light = point_lights[i];
@@ -149,30 +179,34 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
       let light_direction: vec3<f32> = normalize((point_light_position.xyz / point_light_position.w) - input.world_position); 
       let distance_to_light = length(light_direction);
 
+      let light_color = srgb_to_linear(point_light.color);
+
       radiance +=
         PI *
         brdf(
-          input.normal,
-          input.color.rgb,
+          surface_normal,
+          albedo.rgb,
           roughness,
           // normalising these directions is important
           light_direction,
           view_direction
         ) *
-        point_light.color.rgb * falloff(point_light.intensity, distance_to_light) *
-        max(dot(input.normal, light_direction), 0.0);
+        light_color.rgb * falloff(point_light.intensity, distance_to_light) *
+        max(dot(surface_normal, light_direction), 0.0);
     }
     
     for (var i: u32 = 0u; i < arrayLength(&directional_lights); i++) {
       let directional_light = directional_lights[i];
 
       let light_direction: vec3<f32> = -directional_light.direction; 
+      
+      let light_color = srgb_to_linear(directional_light.color);
 
       radiance +=
         PI *
-        brdf(input.normal, input.color.rgb, roughness, light_direction, view_direction) *
-        directional_light.color.rgb *
-        max(dot(input.normal, light_direction), 0.0);
+        brdf(surface_normal, albedo.rgb, roughness, light_direction, view_direction) *
+        light_color.rgb *
+        max(dot(surface_normal, light_direction), 0.0);
     }
     
     return vec4<f32>(radiance, input.color.a);

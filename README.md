@@ -11,10 +11,12 @@
   * [x] Per-object transformation matrix
   * [x] Depth testing
   * [ ] Compute vertex normals when missing from `.obj` files
-* Light objects using physically-based techniques
+* Shade objects using physically-based techniques
   * [x] Include vertex normals
   * [x] Punctual and directional lights with diffuse reflectance
-  * [ ] Specular reflectance for punctual and directional lights (not quite working)
+  * [x] Specular reflectance for dielectric materials
+  * [ ] Per-object materials
+  * [ ] Metallic materials
 * [ ] Self-shadowing
 * [ ] Add shadows via shadow mapping
 * Use GPU-driven techniques as much as possible
@@ -45,10 +47,18 @@
   * <https://vkguide.dev/> - `vulkan` / `GLSL`
   * <https://learnopengl.com/> `opengl` / `GLSL`
 * Physically based shading
-  * <https://blog.selfshadow.com/publications/>
-    * <https://blog.selfshadow.com/publications/s2013-shading-course/hoffman/s2013_pbs_physics_math_notes.pdf>
+  * <https://interplayoflight.wordpress.com/2013/12/30/readings-on-physically-based-rendering/> -
+    PBS literature master list 
+  * <https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-24-importance-being-linear>
+  * <https://renderwonk.com/blog/index.php/archive/adventures-with-gamma-correct-rendering/https://renderwonk.com/blog/index.php/archive/adventures-with-gamma-correct-rendering/>
+  * <https://blog.selfshadow.com/publications/> - SIGGRAPH's "Physically Based Shading in Theory and
+    Practise" series
+    * <https://blog.selfshadow.com/publications/s2013-shading-course/hoffman/s2013_pbs_physics_math_notes.pdf> -
+      Very clear introduction to physically based shading fundamentals
   * <https://www.realtimerendering.com/>
-    * Chapter 9
+    * Chapter 9 - Physically Based Shading
+  * <https://google.github.io/filament/Filament.html> - explanations of physically based rendering
+    in the context of Google's [Filament](https://google.github.io/filament/) engine
   * Realtime area lights: <https://eheitzresearch.wordpress.com/415-2/>
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>

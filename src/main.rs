@@ -200,8 +200,15 @@ fn main() {
         .formats
         .iter()
         .copied()
+        // These sRGB texture formats have automatic conversion sRGB->linear conversion when reading
+        // from the texture and linear->sRGB conversion when writing to the texture.
+        //
+        // See:
+        // * <https://docs.rs/wgpu-types/latest/wgpu_types/enum.TextureFormat.html>
+        // * <https://gpuweb.github.io/gpuweb/#texture-formats>
         .find(|format| format.is_srgb())
         .expect("surface does not support sRGB");
+    log::debug!("surface texture format: {:?}", surface_format);
 
     let mut surface_config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -238,7 +245,7 @@ fn main() {
             &queue,
             ObjectData {
                 transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                    x: 0.0,
+                    x: 1.0,
                     y: 0.0,
                     z: 0.0,
                 })
@@ -285,8 +292,8 @@ fn main() {
                         },
                         color: Color {
                             r: 1.0,
-                            g: 0.001,
-                            b: 0.001,
+                            g: 0.0,
+                            b: 0.0,
                             a: 1.0,
                         },
                         object_id,
@@ -513,11 +520,11 @@ fn main() {
             _padding0: [0, 0, 0],
             color: Color {
                 r: 0.0,
-                g: 0.3,
+                g: 0.6,
                 b: 1.0,
                 a: 1.0,
             },
-            intensity: 3.0,
+            intensity: 1.0,
             _padding1: [0, 0, 0],
         }]),
     });
@@ -772,9 +779,9 @@ fn main() {
                                     resolve_target: None,
                                     ops: wgpu::Operations {
                                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                                            r: 0.01,
-                                            g: 0.01,
-                                            b: 0.01,
+                                            r: 0.0,
+                                            g: 0.0,
+                                            b: 0.0,
                                             a: 1.0,
                                         }),
                                         store: true,

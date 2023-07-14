@@ -10,15 +10,18 @@
   * [x] `.obj` model rendering (vertex positions)
   * [x] Per-object transformation matrix
   * [x] Depth testing
-  * [ ] Compute vertex normals when missing from `.obj` files
+  * [x] Compute vertex normals when missing from `.obj` files
 * Shade objects using physically-based techniques
   * [x] Include vertex normals
   * [x] Punctual and directional lights with diffuse reflectance
   * [x] Specular reflectance for dielectric materials
-  * [ ] Per-object materials parameters
+  * [ ] Per-object material parameters (color, roughness)
   * [ ] Metallic materials
+  * [ ] HDR tone mapping
+  * [ ] Physical light units
 * [ ] Self-shadowing
 * [ ] Add shadows via shadow mapping
+* [ ] Anti-aliasing
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
   * [ ] `draw_indirect`
@@ -26,7 +29,6 @@
 ## Stretch goals
 
 * [ ] Ambient occlusion
-* [ ] High dynamic range
 * [ ] Bloom
 * [ ] Area lights
 
@@ -46,6 +48,9 @@
   * <https://sotrh.github.io/learn-wgpu/> - `wgpu` / `WGSL`
   * <https://vkguide.dev/> - `vulkan` / `GLSL`
   * <https://learnopengl.com/> `opengl` / `GLSL`
+* Normal calculation
+  * <https://computergraphics.stackexchange.com/questions/4031/programmatically-generating-vertex-normals>
+  * <https://iquilezles.org/articles/normals/>
 * Physically based shading
   * <https://interplayoflight.wordpress.com/2013/12/30/readings-on-physically-based-rendering/> -
     PBS literature master list 

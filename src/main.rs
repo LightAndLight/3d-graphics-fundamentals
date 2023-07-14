@@ -2,6 +2,7 @@ use it::{
     camera::Camera,
     color::Color,
     light::{DirectionalLight, PointLight},
+    load::load_model,
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
     vector::Vec3,
@@ -255,62 +256,31 @@ fn main() {
         vertex_buffer.insert_many(&queue, &square_camera_space(object_id, 0.25));
     }
 
-    {
-        let (models, _materials) = tobj::load_obj(
-            "models/monkey.obj",
-            &tobj::LoadOptions {
-                single_index: true,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let teapot = &models[0];
+    load_model(
+        &queue,
+        &mut objects,
+        &mut vertex_buffer,
+        "models/teapot.obj",
+        cgmath::Matrix4::from_translation(cgmath::Vector3 {
+            x: -5.0,
+            y: 0.0,
+            z: -10.0,
+        })
+        .into(),
+    );
 
-        let object_id = objects.insert(
-            &queue,
-            ObjectData {
-                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: -10.0,
-                })
-                .into(),
-            },
-        );
-        vertex_buffer.insert_many(&queue, &{
-            let mut vertices = Vec::with_capacity(teapot.mesh.indices.len());
-
-            if teapot.mesh.face_arities.is_empty() {
-                // all faces are triangles
-                for index in teapot.mesh.indices.iter() {
-                    let index = *index as usize;
-                    vertices.push(Vertex {
-                        position: Point3 {
-                            x: teapot.mesh.positions[3 * index],
-                            y: teapot.mesh.positions[3 * index + 1],
-                            z: teapot.mesh.positions[3 * index + 2],
-                        },
-                        color: Color {
-                            r: 1.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        },
-                        object_id,
-                        normal: Vec3 {
-                            x: teapot.mesh.normals[3 * index],
-                            y: teapot.mesh.normals[3 * index + 1],
-                            z: teapot.mesh.normals[3 * index + 2],
-                        },
-                    });
-                }
-            } else {
-                panic!("mesh is not triangulated");
-            }
-
-            vertices
-        });
-    }
+    load_model(
+        &queue,
+        &mut objects,
+        &mut vertex_buffer,
+        "models/monkey.obj",
+        cgmath::Matrix4::from_translation(cgmath::Vector3 {
+            x: 0.0,
+            y: 0.0,
+            z: -10.0,
+        })
+        .into(),
+    );
 
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
 

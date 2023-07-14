@@ -16,9 +16,8 @@
   * [x] Punctual and directional lights with diffuse reflectance
   * [x] Specular reflectance for dielectric materials
   * [x] Per-object material parameters (color, roughness)
-  * [ ] Metallic materials
-  * [ ] HDR tone mapping
-  * [ ] Physical light units
+  * [x] Metallic materials
+  * [ ] HDR tone mapping and physical light units
 * [ ] Self-shadowing
 * [ ] Add shadows via shadow mapping
 * [ ] Anti-aliasing

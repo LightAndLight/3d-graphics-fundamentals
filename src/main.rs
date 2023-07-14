@@ -213,12 +213,19 @@ fn main() {
     let mut objects = Objects::new(&device, 1000);
     let mut materials = Materials::new(&device, 10);
 
-    let shiny_red_material = materials.insert(
+    let matte_gold_material = materials.insert(
         &queue,
         Material {
-            color: Color::RED,
-            roughness: 0.1,
-            _padding: [0, 0, 0],
+            // color: Color::RED,
+            color: Color {
+                r: 1.0,
+                g: 0.86,
+                b: 0.57,
+                a: 1.0,
+            },
+            roughness: 0.45,
+            metallic: 1.0,
+            _padding: [0, 0],
         },
     );
     let matte_red_material = materials.insert(
@@ -226,7 +233,8 @@ fn main() {
         Material {
             color: Color::RED,
             roughness: 0.5,
-            _padding: [0, 0, 0],
+            metallic: 0.0,
+            _padding: [0, 0],
         },
     );
 
@@ -235,7 +243,8 @@ fn main() {
         Material {
             color: Color::GREEN,
             roughness: 0.5,
-            _padding: [0, 0, 0],
+            metallic: 0.5,
+            _padding: [0, 0],
         },
     );
     let blue_material = materials.insert(
@@ -243,7 +252,8 @@ fn main() {
         Material {
             color: Color::BLUE,
             roughness: 0.5,
-            _padding: [0, 0, 0],
+            metallic: 0.5,
+            _padding: [0, 0],
         },
     );
 
@@ -292,7 +302,7 @@ fn main() {
             z: -10.0,
         })
         .into(),
-        shiny_red_material,
+        matte_gold_material,
     );
 
     load_model(

@@ -50,6 +50,7 @@ var<storage, read> directional_lights: array<DirectionalLight>;
 struct Material{
   color: vec4<f32>,
   roughness: f32,
+  metallic: f32,
 }
 
 @group(0) @binding(5)
@@ -94,10 +95,12 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
   if display_normals == 1u {
     output.albedo = vec4<f32>(output.normal, 1.0);
     output.roughness = 1.0;
+    output.metallic = 0.0;
   } else {
     let material = materials[input.material_id];
     output.albedo = srgb_to_linear(material.color);
     output.roughness = material.roughness;
+    output.metallic = material.metallic;
   }
 
   return output;
@@ -108,7 +111,8 @@ struct VertexOutput{
   @location(0) world_position: vec3<f32>,
   @location(1) normal: vec3<f32>,
   @location(2) albedo: vec4<f32>,
-  @location(3) roughness: f32
+  @location(3) roughness: f32,
+  @location(4) metallic: f32
 }
 
 const PI: f32 = 3.14159;
@@ -121,8 +125,7 @@ fn diffuse_brdf(albedo: vec3<f32>, _light_direction: vec3<f32>, _view_direction:
   return albedo / PI;
 }
 
-fn schlick(light_direction: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-  let f0 = vec3<f32>(0.04);
+fn schlick(f0: vec3<f32>, light_direction: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
   return f0 + (1.0 - f0) * pow(1.0 - max(dot(normal, light_direction), 0.0), 5.0);
 }
 
@@ -170,12 +173,20 @@ are optimised and written to avoid unnecessary divides-by-zero, so they take a s
     In Proceedings of the 18th Eurographics conference on Rendering Techniques (pp. 195-206).
 */
 
-fn brdf(normal: vec3<f32>, albedo: vec3<f32>, roughness: f32, light_direction: vec3<f32>, view_direction: vec3<f32>) -> vec3<f32> {
+fn brdf(
+  normal: vec3<f32>,
+  albedo: vec3<f32>,
+  roughness: f32,
+  metallic: f32,
+  light_direction: vec3<f32>,
+  view_direction: vec3<f32>
+) -> vec3<f32> {
   let half_vector = normalize(light_direction + view_direction);
   
   let alpha = pow(roughness, 2.0);
 
-  let f = schlick(light_direction, half_vector);
+  let f0 = mix(vec3<f32>(0.04), albedo.rgb, metallic);
+  let f = schlick(f0, light_direction, half_vector);
   let g = geometry(alpha, normal, light_direction, view_direction, half_vector);
   let d = distribution(alpha, normal, half_vector);
   let specular = 
@@ -183,7 +194,7 @@ fn brdf(normal: vec3<f32>, albedo: vec3<f32>, roughness: f32, light_direction: v
     / 
     (4.0 * max(dot(normal, light_direction), 0.00001) * max(dot(normal, view_direction), 0.00001));
 
-  let diffuse = (1.0 - f) * diffuse_brdf(albedo, light_direction, view_direction);
+  let diffuse = (1.0 - f) * (1.0 - metallic) * diffuse_brdf(albedo, light_direction, view_direction);
 
   return diffuse + specular;
 }
@@ -198,8 +209,9 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     // the interpolated vertex normals won't be normalised.
     let surface_normal = normalize(input.normal);
     
-    let roughness = input.roughness;
     let albedo = input.albedo;
+    let roughness = input.roughness;
+    let metallic = input.metallic;
     
     var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
       
@@ -220,6 +232,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
           surface_normal,
           albedo.rgb,
           roughness,
+          metallic,
           // normalising these directions is important
           light_direction,
           view_direction
@@ -237,7 +250,14 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
       radiance +=
         PI *
-        brdf(surface_normal, albedo.rgb, roughness, light_direction, view_direction) *
+        brdf(
+          surface_normal,
+          albedo.rgb,
+          roughness,
+          metallic,
+          light_direction,
+          view_direction
+        ) *
         light_color.rgb *
         max(dot(surface_normal, light_direction), 0.0);
     }

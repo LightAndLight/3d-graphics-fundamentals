@@ -9,7 +9,8 @@ pub struct MaterialId(pub u32);
 pub struct Material {
     pub color: Color,
     pub roughness: f32,
-    pub _padding: [u32; 3],
+    pub metallic: f32,
+    pub _padding: [u32; 2],
 }
 
 pub struct Materials(GpuBuffer<Material>);

@@ -1,5 +1,5 @@
 use crate::{
-    color::Color,
+    material::MaterialId,
     matrix::Matrix4,
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
@@ -14,6 +14,7 @@ pub fn load_model(
     vertex_buffer: &mut VertexBuffer,
     file_name: &str,
     transform: Matrix4,
+    material_id: MaterialId,
 ) {
     let (models, _materials) = tobj::load_obj(
         file_name,
@@ -33,7 +34,7 @@ pub fn load_model(
         if model.mesh.face_arities.is_empty() {
             // all faces are triangles
             if model.mesh.normals.is_empty() {
-                extract_and_normalise(object_id, model, &mut vertices);
+                extract_and_normalise(object_id, material_id, model, &mut vertices);
             } else {
                 /*
                 assert!(
@@ -50,18 +51,13 @@ pub fn load_model(
                             y: model.mesh.positions[3 * index + 1],
                             z: model.mesh.positions[3 * index + 2],
                         },
-                        color: Color {
-                            r: 1.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        },
                         object_id,
                         normal: Vec3 {
                             x: model.mesh.normals[3 * index],
                             y: model.mesh.normals[3 * index + 1],
                             z: model.mesh.normals[3 * index + 2],
                         },
+                        material_id,
                     });
                 }
             }
@@ -82,7 +78,12 @@ enum NormalStyle {
 
 const NORMAL_STYLE: NormalStyle = NormalStyle::Vertex;
 
-fn extract_and_normalise(object_id: ObjectId, model: &tobj::Model, vertices: &mut Vec<Vertex>) {
+fn extract_and_normalise(
+    object_id: ObjectId,
+    material_id: MaterialId,
+    model: &tobj::Model,
+    vertices: &mut Vec<Vertex>,
+) {
     let mut normals: Vec<Vec3> = match NORMAL_STYLE {
         NormalStyle::Vertex => std::iter::repeat(Vec3::ZERO)
             .take(model.mesh.positions.len())
@@ -131,38 +132,23 @@ fn extract_and_normalise(object_id: ObjectId, model: &tobj::Model, vertices: &mu
 
         vertices.push(Vertex {
             position: a,
-            color: Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
             object_id,
             normal,
+            material_id,
         });
 
         vertices.push(Vertex {
             position: b,
-            color: Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
             object_id,
             normal,
+            material_id,
         });
 
         vertices.push(Vertex {
             position: c,
-            color: Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
             object_id,
             normal,
+            material_id,
         });
     }
 

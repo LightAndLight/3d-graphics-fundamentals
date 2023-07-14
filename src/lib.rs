@@ -1,7 +1,9 @@
 pub mod camera;
 pub mod color;
+pub mod gpu_buffer;
 pub mod light;
 pub mod load;
+pub mod material;
 pub mod matrix;
 pub mod objects;
 pub mod point;

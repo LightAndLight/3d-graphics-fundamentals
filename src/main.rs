@@ -3,6 +3,7 @@ use it::{
     color::Color,
     light::{DirectionalLight, PointLight},
     load::load_model,
+    material::{Material, MaterialId, Materials},
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
     vector::Vec3,
@@ -16,7 +17,7 @@ use winit::{
     window::Window,
 };
 
-fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
+fn triangle_camera_space(object_id: ObjectId, material_id: MaterialId) -> Vec<Vertex> {
     vec![
         Vertex {
             position: Point3 {
@@ -24,18 +25,13 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
                 y: -0.5,
                 z: 0.0,
             },
-            color: Color {
-                r: 0.1,
-                g: 0.2,
-                b: 0.3,
-                a: 1.0,
-            },
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
         Vertex {
             position: Point3 {
@@ -43,18 +39,13 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
                 y: 0.5,
                 z: 0.0,
             },
-            color: Color {
-                r: 0.3,
-                g: 0.4,
-                b: 0.5,
-                a: 1.0,
-            },
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
         Vertex {
             position: Point3 {
@@ -62,23 +53,18 @@ fn triangle_camera_space(object_id: ObjectId) -> Vec<Vertex> {
                 y: -0.5,
                 z: 0.0,
             },
-            color: Color {
-                r: 0.5,
-                g: 0.6,
-                b: 0.7,
-                a: 1.0,
-            },
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
     ]
 }
 
-fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
+fn square_camera_space(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
     let side_over_2 = side / 2.0;
     vec![
         Vertex {
@@ -87,13 +73,13 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
                 y: side_over_2,
                 z: 0.0,
             },
-            color: Color::GREEN,
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
         Vertex {
             position: Point3 {
@@ -101,13 +87,13 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
                 y: side_over_2,
                 z: 0.0,
             },
-            color: Color::GREEN,
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
         Vertex {
             position: Point3 {
@@ -115,13 +101,13 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
                 y: -side_over_2,
                 z: 0.0,
             },
-            color: Color::GREEN,
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
         Vertex {
             position: Point3 {
@@ -129,13 +115,13 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
                 y: side_over_2,
                 z: 0.0,
             },
-            color: Color::GREEN,
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
         Vertex {
             position: Point3 {
@@ -143,13 +129,13 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
                 y: -side_over_2,
                 z: 0.0,
             },
-            color: Color::GREEN,
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
         Vertex {
             position: Point3 {
@@ -157,13 +143,13 @@ fn square_camera_space(object_id: ObjectId, side: f32) -> Vec<Vertex> {
                 y: -side_over_2,
                 z: 0.0,
             },
-            color: Color::GREEN,
             object_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
             },
+            material_id,
         },
     ]
 }
@@ -225,6 +211,17 @@ fn main() {
     let shader_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     let mut objects = Objects::new(&device, 1000);
+    let mut materials = Materials::new(&device, 10);
+
+    let red_material = materials.insert(&queue, Material { color: Color::RED });
+    let green_material = materials.insert(
+        &queue,
+        Material {
+            color: Color::GREEN,
+        },
+    );
+    let blue_material = materials.insert(&queue, Material { color: Color::BLUE });
+
     let mut vertex_buffer = VertexBuffer::new(&device, 100000);
     {
         let object_id = objects.insert(
@@ -238,7 +235,7 @@ fn main() {
                 .into(),
             },
         );
-        vertex_buffer.insert_many(&queue, &triangle_camera_space(object_id));
+        vertex_buffer.insert_many(&queue, &triangle_camera_space(object_id, blue_material));
     }
 
     {
@@ -253,7 +250,10 @@ fn main() {
                 .into(),
             },
         );
-        vertex_buffer.insert_many(&queue, &square_camera_space(object_id, 0.25));
+        vertex_buffer.insert_many(
+            &queue,
+            &square_camera_space(object_id, green_material, 0.25),
+        );
     }
 
     load_model(
@@ -267,6 +267,7 @@ fn main() {
             z: -10.0,
         })
         .into(),
+        red_material,
     );
 
     load_model(
@@ -280,38 +281,10 @@ fn main() {
             z: -10.0,
         })
         .into(),
+        red_material,
     );
 
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
-
-    let vertex_buffer_layout = wgpu::VertexBufferLayout {
-        array_stride: std::mem::size_of::<Vertex>() as u64,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &[
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x3,
-                offset: 0,
-                shader_location: 0,
-            },
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x4,
-                offset: std::mem::size_of::<Point3>() as u64,
-                shader_location: 1,
-            },
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Uint32,
-                offset: std::mem::size_of::<Point3>() as u64 + std::mem::size_of::<Color>() as u64,
-                shader_location: 2,
-            },
-            wgpu::VertexAttribute {
-                format: wgpu::VertexFormat::Float32x3,
-                offset: std::mem::size_of::<Point3>() as u64
-                    + std::mem::size_of::<Color>() as u64
-                    + std::mem::size_of::<ObjectId>() as u64,
-                shader_location: 3,
-            },
-        ],
-    };
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
@@ -371,6 +344,17 @@ fn main() {
                 },
                 count: None,
             },
+            // materials
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
         ],
     });
 
@@ -399,7 +383,7 @@ fn main() {
         vertex: wgpu::VertexState {
             module: &shader_module,
             entry_point: "vertex_main",
-            buffers: &[vertex_buffer_layout],
+            buffers: &[Vertex::LAYOUT],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader_module,
@@ -564,6 +548,14 @@ fn main() {
                 binding: 4,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &directional_lights_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: materials.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),

@@ -47,11 +47,35 @@ struct DirectionalLight{
 @group(0) @binding(4)
 var<storage, read> directional_lights: array<DirectionalLight>;
 
+struct Material{
+  color: vec4<f32>
+}
+
+@group(0) @binding(5)
+var<storage, read> materials: array<Material>;
+
+fn srgb_to_linear_scalar(srgb: f32) -> f32 {
+  if srgb <= 0.04045 {
+    return srgb / 12.92;
+  } else {
+    return pow((srgb + 0.055) / 1.055, 2.4);
+  }
+}
+
+fn srgb_to_linear(srgb: vec4<f32>) -> vec4<f32> {
+  return vec4<f32>(
+    srgb_to_linear_scalar(srgb.r),
+    srgb_to_linear_scalar(srgb.g),
+    srgb_to_linear_scalar(srgb.b),
+    srgb.a
+  );
+}
+
 struct VertexInput{
   @location(0) position: vec3<f32>,
-  @location(1) color: vec4<f32>,
-  @location(2) object_id: u32,
-  @location(3) normal: vec3<f32>
+  @location(1) object_id: u32,
+  @location(2) normal: vec3<f32>,
+  @location(3) material_id: u32
 }
 
 @vertex
@@ -67,9 +91,10 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
   output.normal = input.normal;
 
   if display_normals == 1u {
-    output.color = vec4<f32>(output.normal, 1.0);
+    output.albedo = vec4<f32>(output.normal, 1.0);
   } else {
-    output.color = input.color;
+    let material = materials[input.material_id];
+    output.albedo = srgb_to_linear(material.color);
   }
 
   return output;
@@ -77,9 +102,9 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
 
 struct VertexOutput{
   @builtin(position) position: vec4<f32>,
-  @location(0) color: vec4<f32>,
+  @location(0) world_position: vec3<f32>,
   @location(1) normal: vec3<f32>,
-  @location(2) world_position: vec3<f32>
+  @location(2) albedo: vec4<f32>
 }
 
 const PI: f32 = 3.14159;
@@ -159,27 +184,10 @@ fn brdf(normal: vec3<f32>, albedo: vec3<f32>, roughness: f32, light_direction: v
   return diffuse + specular;
 }
 
-fn srgb_to_linear_scalar(srgb: f32) -> f32 {
-  if srgb <= 0.04045 {
-    return srgb / 12.92;
-  } else {
-    return pow((srgb + 0.055) / 1.055, 2.4);
-  }
-}
-
-fn srgb_to_linear(srgb: vec4<f32>) -> vec4<f32> {
-  return vec4<f32>(
-    srgb_to_linear_scalar(srgb.r),
-    srgb_to_linear_scalar(srgb.g),
-    srgb_to_linear_scalar(srgb.b),
-    srgb.a
-  );
-}
-
 @fragment
 fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
   if display_normals == 1u {
-    return input.color;
+    return input.albedo;
   } else {
     var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
@@ -187,7 +195,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
  
     let view_direction = normalize(camera.eye - input.world_position);
 
-    let albedo = srgb_to_linear(input.color);
+    let albedo = input.albedo;
 
     // the interpolated vertex normals won't be normalised.
     let surface_normal = normalize(input.normal);
@@ -231,6 +239,6 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         max(dot(surface_normal, light_direction), 0.0);
     }
     
-    return vec4<f32>(radiance, input.color.a);
+    return vec4<f32>(radiance, input.albedo.a);
   }
 }

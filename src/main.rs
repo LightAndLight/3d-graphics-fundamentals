@@ -213,14 +213,39 @@ fn main() {
     let mut objects = Objects::new(&device, 1000);
     let mut materials = Materials::new(&device, 10);
 
-    let red_material = materials.insert(&queue, Material { color: Color::RED });
+    let shiny_red_material = materials.insert(
+        &queue,
+        Material {
+            color: Color::RED,
+            roughness: 0.1,
+            _padding: [0, 0, 0],
+        },
+    );
+    let matte_red_material = materials.insert(
+        &queue,
+        Material {
+            color: Color::RED,
+            roughness: 0.5,
+            _padding: [0, 0, 0],
+        },
+    );
+
     let green_material = materials.insert(
         &queue,
         Material {
             color: Color::GREEN,
+            roughness: 0.5,
+            _padding: [0, 0, 0],
         },
     );
-    let blue_material = materials.insert(&queue, Material { color: Color::BLUE });
+    let blue_material = materials.insert(
+        &queue,
+        Material {
+            color: Color::BLUE,
+            roughness: 0.5,
+            _padding: [0, 0, 0],
+        },
+    );
 
     let mut vertex_buffer = VertexBuffer::new(&device, 100000);
     {
@@ -267,7 +292,7 @@ fn main() {
             z: -10.0,
         })
         .into(),
-        red_material,
+        shiny_red_material,
     );
 
     load_model(
@@ -281,7 +306,7 @@ fn main() {
             z: -10.0,
         })
         .into(),
-        red_material,
+        matte_red_material,
     );
 
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));

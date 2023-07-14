@@ -8,6 +8,8 @@ pub struct MaterialId(pub u32);
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Material {
     pub color: Color,
+    pub roughness: f32,
+    pub _padding: [u32; 3],
 }
 
 pub struct Materials(GpuBuffer<Material>);

@@ -15,7 +15,7 @@
   * [x] Include vertex normals
   * [x] Punctual and directional lights with diffuse reflectance
   * [x] Specular reflectance for dielectric materials
-  * [ ] Per-object material parameters (color, roughness)
+  * [x] Per-object material parameters (color, roughness)
   * [ ] Metallic materials
   * [ ] HDR tone mapping
   * [ ] Physical light units

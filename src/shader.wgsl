@@ -48,7 +48,8 @@ struct DirectionalLight{
 var<storage, read> directional_lights: array<DirectionalLight>;
 
 struct Material{
-  color: vec4<f32>
+  color: vec4<f32>,
+  roughness: f32,
 }
 
 @group(0) @binding(5)
@@ -92,9 +93,11 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
 
   if display_normals == 1u {
     output.albedo = vec4<f32>(output.normal, 1.0);
+    output.roughness = 1.0;
   } else {
     let material = materials[input.material_id];
     output.albedo = srgb_to_linear(material.color);
+    output.roughness = material.roughness;
   }
 
   return output;
@@ -104,7 +107,8 @@ struct VertexOutput{
   @builtin(position) position: vec4<f32>,
   @location(0) world_position: vec3<f32>,
   @location(1) normal: vec3<f32>,
-  @location(2) albedo: vec4<f32>
+  @location(2) albedo: vec4<f32>,
+  @location(3) roughness: f32
 }
 
 const PI: f32 = 3.14159;
@@ -189,16 +193,15 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
   if display_normals == 1u {
     return input.albedo;
   } else {
-    var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-
-    let roughness = 0.4;
- 
     let view_direction = normalize(camera.eye - input.world_position);
-
-    let albedo = input.albedo;
 
     // the interpolated vertex normals won't be normalised.
     let surface_normal = normalize(input.normal);
+    
+    let roughness = input.roughness;
+    let albedo = input.albedo;
+    
+    var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
       
     for (var i: u32 = 0u; i < arrayLength(&point_lights); i++) {
       let point_light = point_lights[i];

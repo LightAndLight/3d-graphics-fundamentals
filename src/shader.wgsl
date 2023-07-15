@@ -33,7 +33,7 @@ var<uniform> display_normals: u32; // Apparently booleans aren't host-mappable?
 struct PointLight{
   object_id: u32,
   color: vec4<f32>,
-  intensity: f32
+  luminous_power: f32
 }
 
 @group(0) @binding(3)
@@ -41,7 +41,8 @@ var<storage, read> point_lights: array<PointLight>;
 
 struct DirectionalLight{
   color: vec4<f32>,
-  direction: vec3<f32>
+  direction: vec3<f32>,
+  illuminance: f32
 }
 
 @group(0) @binding(4)
@@ -117,8 +118,8 @@ struct VertexOutput{
 
 const PI: f32 = 3.14159;
 
-fn falloff(intensity: f32, distance: f32) -> f32 {
-  return pow(intensity / distance, 2.0);
+fn attenuation(distance: f32) -> f32 {
+  return 1.0 / (4.0 * PI * distance * distance);
 }
 
 fn diffuse_brdf(albedo: vec3<f32>, _light_direction: vec3<f32>, _view_direction: vec3<f32>) -> vec3<f32> {
@@ -199,6 +200,24 @@ fn brdf(
   return diffuse + specular;
 }
 
+// The amount of luminance required to saturate our ISO100 "sensor".
+fn saturating_luminance_EV100(ev: f32) -> f32 {
+  return 1.2 * pow(2.0, ev);
+}
+
+fn reinhard(in: vec3<f32>) -> vec3<f32> {
+  return in / (vec3<f32>(1.0) + in);
+}
+
+// Source: http://filmicworlds.com/blog/why-a-filmic-curve-saturates-your-blacks/
+fn duiker_approx(in: vec3<f32>) -> vec3<f32> {
+  let x = max(vec3<f32>(0.0), in - vec3<f32>(0.004));
+  return
+    x * (6.2 * x + vec3<f32>(0.5))
+    /
+    (x * (6.2 * x + vec3<f32>(1.7)) + vec3<f32>(0.06));
+}
+
 @fragment
 fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
   if display_normals == 1u {
@@ -213,7 +232,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let roughness = input.roughness;
     let metallic = input.metallic;
     
-    var radiance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+    var luminance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
       
     for (var i: u32 = 0u; i < arrayLength(&point_lights); i++) {
       let point_light = point_lights[i];
@@ -226,7 +245,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
       let light_color = srgb_to_linear(point_light.color);
 
-      radiance +=
+      luminance +=
         PI *
         brdf(
           surface_normal,
@@ -237,7 +256,9 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
           light_direction,
           view_direction
         ) *
-        light_color.rgb * falloff(point_light.intensity, distance_to_light) *
+        light_color.rgb *
+        point_light.luminous_power *
+        attenuation(distance_to_light) *
         max(dot(surface_normal, light_direction), 0.0);
     }
     
@@ -248,7 +269,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
       
       let light_color = srgb_to_linear(directional_light.color);
 
-      radiance +=
+      luminance +=
         PI *
         brdf(
           surface_normal,
@@ -258,10 +279,15 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
           light_direction,
           view_direction
         ) *
+        directional_light.illuminance *
         light_color.rgb *
         max(dot(surface_normal, light_direction), 0.0);
     }
+
+    let normalized_luminance = luminance / saturating_luminance_EV100(14.6);
     
-    return vec4<f32>(radiance, input.albedo.a);
+    return vec4<f32>(normalized_luminance, input.albedo.a);
+    // return vec4<f32>(duiker_approx(normalized_luminance), input.albedo.a);
+    // return vec4<f32>(reinhard(normalized_luminance), input.albedo.a);
   }
 }

@@ -17,7 +17,9 @@
   * [x] Specular reflectance for dielectric materials
   * [x] Per-object material parameters (color, roughness)
   * [x] Metallic materials
-  * [ ] HDR tone mapping and physical light units
+  * [x] Physical light units, manual exposure
+  * [ ] Tone mapping
+  * [ ] Automatic exposure
 * [ ] Self-shadowing
 * [ ] Add shadows via shadow mapping
 * [ ] Anti-aliasing
@@ -66,6 +68,21 @@
   * Production implementations
     * Blender - <https://github.com/blender/blender/blob/main/source/blender/draw/engines/eevee/shaders/bsdf_common_lib.glsl>
     * Disney - <https://github.com/wdas/brdf/blob/main/src/brdfs/disney.brdf>
+* HDR rendering
+  * Exposure
+    * <https://en.wikipedia.org/wiki/Film_speed>
+    * <https://en.wikipedia.org/wiki/Exposure_(photography)>
+    * <https://en.wikipedia.org/wiki/Exposure_value>
+    * <https://en.wikipedia.org/wiki/Sunny_16_rule>
+    * <https://seblagarde.wordpress.com/2015/07/14/siggraph-2014-moving-frostbite-to-physically-based-rendering/>
+    * <https://placeholderart.wordpress.com/2014/11/21/implementing-a-physically-based-camera-manual-exposure/>
+  * Tone mapping
+    * <https://seenaburns.com/dynamic-range/>
+    * <https://64.github.io/tonemapping/>
+    * <http://filmicworlds.com/blog/filmic-tonemapping-operators/>
+    * <http://filmicworlds.com/blog/why-a-filmic-curve-saturates-your-blacks/>
+    * <http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/>
+    * <http://duikerresearch.com/2015/09/filmic-tonemapping-for-real-time-rendering/>
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>
   * <http://graphics.stanford.edu/data/3Dscanrep/>

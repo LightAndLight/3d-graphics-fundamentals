@@ -524,7 +524,7 @@ fn main() {
                 b: 1.0,
                 a: 1.0,
             },
-            intensity: 1.0,
+            luminous_power: 2e5,
             _padding1: [0, 0, 0],
         }]),
     });
@@ -539,7 +539,7 @@ fn main() {
                 y: -1.0,
                 z: -0.2,
             },
-            _padding: 0,
+            illuminance: 110_000.0,
         }]),
     });
 

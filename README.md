@@ -18,7 +18,7 @@
   * [x] Per-object material parameters (color, roughness)
   * [x] Metallic materials
   * [x] Physical light units, manual exposure
-  * [ ] Tone mapping
+  * [x] Tone mapping
   * [ ] Automatic exposure
 * [ ] Self-shadowing
 * [ ] Add shadows via shadow mapping

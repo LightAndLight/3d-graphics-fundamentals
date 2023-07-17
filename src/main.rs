@@ -524,7 +524,7 @@ fn main() {
                 b: 1.0,
                 a: 1.0,
             },
-            luminous_power: 2e5,
+            luminous_power: 6e5,
             _padding1: [0, 0, 0],
         }]),
     });

@@ -200,7 +200,35 @@ fn brdf(
   return diffuse + specular;
 }
 
-// The amount of luminance required to saturate our ISO100 "sensor".
+/* The amount of luminance required to saturate our ISO100 "sensor".
+
+Saturation-based speed: `S_sat = 78/H_sat`[^1]. `H_sat` is the luminance exposure that will saturate
+the sensor. Rearrange: `H_sat = 78/S_sat`. `S_sat = 100` for ISO100 film speed. `H_sat = 0.78`.
+
+Luminous exposure: `H = qL * (t / N^2)`[^2] (`q` is a lens transmittance factor, `L` is incoming luminance, `t` is exposure time, `N` is the aperture f-number, )
+Exposure value: `EV = log_2(N^2 / t)`[^3]
+
+Luminous exposure in terms of incoming luminance and EV:
+
+```
+H
+= qL * (t / N^2)
+= qL / (N^2 / t)
+= qL / 2^EV
+```
+
+Incoming luminance that will cause ISO100 sensor to saturate, in terms of EV.
+
+```
+q * L_sat / 2^EV = 0.78
+L_sat = (0.78 / q) * 2^EV
+```
+
+[^1]: <https://en.wikipedia.org/wiki/Film_speed#Saturation-based_speed>
+[^2]: <https://en.wikipedia.org/wiki/Film_speed#Measurements_and_calculations>
+[^3]: <https://en.wikipedia.org/wiki/Exposure_value#Formal_definition>
+
+*/
 fn saturating_luminance_EV100(ev: f32) -> f32 {
   return 1.2 * pow(2.0, ev);
 }
@@ -213,9 +241,12 @@ fn reinhard(in: vec3<f32>) -> vec3<f32> {
 fn duiker_approx(in: vec3<f32>) -> vec3<f32> {
   let x = max(vec3<f32>(0.0), in - vec3<f32>(0.004));
   return
-    x * (6.2 * x + vec3<f32>(0.5))
-    /
-    (x * (6.2 * x + vec3<f32>(1.7)) + vec3<f32>(0.06));
+    pow(
+      x * (6.2 * x + vec3<f32>(0.5))
+      /
+      (x * (6.2 * x + vec3<f32>(1.7)) + vec3<f32>(0.06)),
+      vec3<f32>(2.2)
+    );
 }
 
 @fragment
@@ -284,10 +315,11 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         max(dot(surface_normal, light_direction), 0.0);
     }
 
-    let normalized_luminance = luminance / saturating_luminance_EV100(14.6);
+    let ev100 = 14.6;
+    let normalized_luminance = luminance / saturating_luminance_EV100(ev100);
     
-    return vec4<f32>(normalized_luminance, input.albedo.a);
-    // return vec4<f32>(duiker_approx(normalized_luminance), input.albedo.a);
+    // return vec4<f32>(normalized_luminance, input.albedo.a);
+    return vec4<f32>(duiker_approx(normalized_luminance), input.albedo.a);
     // return vec4<f32>(reinhard(normalized_luminance), input.albedo.a);
   }
 }

@@ -19,7 +19,7 @@
   * [x] Metallic materials
   * [x] Physical light units, manual exposure
   * [x] Tone mapping
-  * [ ] Automatic exposure
+  * [x] Automatic exposure using average scene luminance
 * [ ] Self-shadowing
 * [ ] Add shadows via shadow mapping
 * [ ] Anti-aliasing
@@ -32,6 +32,7 @@
 * [ ] Ambient occlusion
 * [ ] Bloom
 * [ ] Area lights
+* [ ] Histogram-based auto-exposure
 
 ## For fun
 

@@ -5,10 +5,13 @@ use it::{
     color::Color,
     light::{DirectionalLight, PointLight},
     load::load_model,
+    luminance::{self, Luminance},
     material::{Material, MaterialId, Materials},
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
-    vector::{Vec2, Vec3},
+    render_hdr::{self, RenderHdr},
+    tone_mapping::{self, ToneMapping},
+    vector::Vec3,
     vertex::Vertex,
     vertex_buffer::VertexBuffer,
 };
@@ -259,8 +262,6 @@ fn main() {
     };
     surface.configure(&device, &surface_config);
 
-    let shader_module = device.create_shader_module(wgpu::include_wgsl!("render_hdr.wgsl"));
-
     let mut objects = Objects::new(&device, 1000);
     let mut materials = Materials::new(&device, 10);
 
@@ -387,7 +388,6 @@ fn main() {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
-
     let hdr_render_target_view =
         hdr_render_target.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -404,151 +404,6 @@ fn main() {
         compare: None,
         anisotropy_clamp: 1,
         border_color: None,
-    });
-
-    let render_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                // camera
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // objects
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // display_normals
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // point_lights
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // directional_lights
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // materials
-                wgpu::BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-    let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[&render_bind_group_layout],
-        push_constant_ranges: &[],
-    });
-
-    /*
-    A floating point depth buffer is pretty important for working with a high `camera.near` to
-    `camera.far` ratio.
-
-    This fixed some weird popping in/out I was getting on certain not-close geometry.
-
-    See:
-    * <https://www.khronos.org/opengl/wiki/Depth_Buffer_Precision>
-    * <http://www.humus.name/index.php?ID=255>
-    * <https://outerra.blogspot.com/2012/11/maximizing-depth-buffer-range-and.html>
-    */
-    let depth_texture_format = wgpu::TextureFormat::Depth32Float;
-
-    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: None,
-        layout: Some(&render_pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &shader_module,
-            entry_point: "vertex_main",
-            buffers: &[Vertex::LAYOUT],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader_module,
-            entry_point: "fragment_main",
-            targets: &[Some(wgpu::ColorTargetState {
-                format: hdr_render_target_format,
-                // HDR render target format (Rgba32Float) doesn't support blending.
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: Some(wgpu::Face::Back),
-            unclipped_depth: false,
-            polygon_mode: wgpu::PolygonMode::Fill,
-            conservative: false,
-        },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: depth_texture_format,
-            // If this is disabled then depth testing won't happen.
-            depth_write_enabled: true,
-            /*
-            WebGPU doesn't specify a Z direction for NDC:
-            <https://www.reddit.com/r/wgpu/comments/tilvas/is_your_wgpu_world_left_or_right_handed/iykwrp0/>
-
-            The Z direction is implied by the projection matrix, and the depth test needs to bet
-            configured to match. If the projection matrix makes objects with high Z smaller (left-handed coordinates / "+Z in"),
-            then the closest fragment is the one with the smallest Z, which means we need to
-            clear to 1.0 (max Z / far plane) and use the `Less` comparison.
-
-            Conversely, if the projection matrix made objects with low Z smaller (right-handed / "+Z out"),
-            then we'd need to clear to 0.0 (min Z / far plane) and use the `Greater` comparison.
-            */
-            depth_compare: wgpu::CompareFunction::Less,
-            stencil: wgpu::StencilState::default(),
-            // What's depth bias?
-            bias: wgpu::DepthBiasState::default(),
-        }),
-        multisample: wgpu::MultisampleState::default(),
-        // What's a multiview render pass?
-        multiview: None,
     });
 
     let mut camera = Camera {
@@ -630,11 +485,18 @@ fn main() {
         }]),
     });
 
-    let mut w_held = false;
-    let mut a_held = false;
-    let mut s_held = false;
-    let mut d_held = false;
+    /*
+    A floating point depth buffer is pretty important for working with a high `camera.near` to
+    `camera.far` ratio.
 
+    This fixed some weird popping in/out I was getting on certain not-close geometry.
+
+    See:
+    * <https://www.khronos.org/opengl/wiki/Depth_Buffer_Precision>
+    * <http://www.humus.name/index.php?ID=255>
+    * <https://outerra.blogspot.com/2012/11/maximizing-depth-buffer-range-and.html>
+    */
+    let depth_texture_format = wgpu::TextureFormat::Depth32Float;
     let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("depth_texture"),
         // TODO: recreate this texture when window is resized.
@@ -661,92 +523,19 @@ fn main() {
         array_layer_count: None,
     });
 
-    let luminance_pass_bind_group_0_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("luminance_pass_bind_group_0_layout"),
-            entries: &[
-                // @group(0) @binding(0)
-                // var hdr_render_target: texture_2d<f32>;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                // @group(0) @binding(1)
-                // var hdr_render_target_sampler: sampler;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                    count: None,
-                },
-                // @group(0) @binding(2)
-                // var<uniform> total_luminance_pixels_per_thread: u32;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // @group(0) @binding(3)
-                // var<storage, read_write> total_luminance_intermediate: array<f32>;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // @group(0) @binding(4)
-                // var<storage, read_write> average_luminance: f32;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // @group(0) @binding(5)
-                // var<storage, read_write> auto_EV100: f32;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // @group(0) @binding(6)
-                // var<storage, read_write> saturating_luminance: f32;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 6,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
+    let render_hdr = RenderHdr::new(
+        &device,
+        hdr_render_target_format,
+        depth_texture_format,
+        render_hdr::BindGroup0 {
+            camera: &camera_buffer,
+            objects: &objects,
+            display_normals: &display_normals_buffer,
+            point_lights: &point_lights_buffer,
+            directional_lights: &directional_lights_buffer,
+            materials: &materials,
+        },
+    );
 
     let num_pixels = surface_config.width * surface_config.height;
 
@@ -779,12 +568,14 @@ fn main() {
         contents: bytemuck::cast_slice(&[0.0]),
         usage: wgpu::BufferUsages::STORAGE,
     });
+
     #[allow(non_snake_case)]
     let auto_EV100_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("auto_EV100"),
         contents: bytemuck::cast_slice(&[0.0]),
         usage: wgpu::BufferUsages::STORAGE,
     });
+
     let saturating_luminance_buffer =
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("saturating_luminance"),
@@ -792,206 +583,18 @@ fn main() {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-    let luminance_pass_bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("luminance_pass_bind_group_0"),
-        layout: &luminance_pass_bind_group_0_layout,
-        entries: &[
-            // @group(0) @binding(0)
-            // var<storage, read> hdr_render_target: texture_storage_2d<vec4<f32>, read>;
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&hdr_render_target_view),
-            },
-            // @group(0) @binding(1)
-            // var hdr_render_target_sampler: sampler;
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&hdr_render_target_sampler),
-            },
-            // @group(0) @binding(2)
-            // var<uniform> total_luminance_pixels_per_thread: u32;
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &total_luminance_pixels_per_thread_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            // @group(0) @binding(3)
-            // var<storage, read_write> total_luminance_intermediate: array<f32>;
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &total_luminance_intermediate_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            // @group(0) @binding(4)
-            // var<storage, read_write> average_luminance: f32;
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &average_luminance_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            // @group(0) @binding(5)
-            // var<storage, read_write> auto_EV100: f32;
-            wgpu::BindGroupEntry {
-                binding: 5,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &auto_EV100_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            // @group(0) @binding(6)
-            // var<storage, read_write> saturating_luminance: f32;
-            wgpu::BindGroupEntry {
-                binding: 6,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &saturating_luminance_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-        ],
-    });
-
-    let luminance_pipeline_layout =
-        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("luminance_pipeline_layout"),
-            bind_group_layouts: &[&luminance_pass_bind_group_0_layout],
-            push_constant_ranges: &[],
-        });
-
-    let luminance_shader_module =
-        device.create_shader_module(wgpu::include_wgsl!("luminance.wgsl"));
-
-    let calculate_total_luminance_intermediate_pipeline =
-        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("calculate_total_luminance_intermediate_pipeline"),
-            layout: Some(&luminance_pipeline_layout),
-            module: &luminance_shader_module,
-            entry_point: "calculate_total_luminance_intermediate",
-        });
-
-    let calculate_average_luminance_pipeline =
-        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("calculate_average_luminance_pipeline"),
-            layout: Some(&luminance_pipeline_layout),
-            module: &luminance_shader_module,
-            entry_point: "calculate_average_luminance",
-        });
-
-    let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
-        layout: &render_bind_group_layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &camera_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: objects.as_raw_buffer(),
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &display_normals_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &point_lights_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &directional_lights_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            wgpu::BindGroupEntry {
-                binding: 5,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: materials.as_raw_buffer(),
-                    offset: 0,
-                    size: None,
-                }),
-            },
-        ],
-    });
-
-    let tone_mapping_pipeline_bind_group_layout =
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("tone_mapping_pipeline_bind_group_layout"),
-            entries: &[
-                // @group(0) @binding(0)
-                // var hdr_render_target: texture_2d<f32>;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                // @group(0) @binding(1)
-                // var hdr_render_target_sampler: sampler;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                    count: None,
-                },
-                // @group(0) @binding(2)
-                // var<uniform> tone_mapping_enabled: u32;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // @group(0) @binding(3)
-                // var<storage, read> saturating_luminance: f32;
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
+    let luminance = Luminance::new(
+        &device,
+        luminance::BindGroup0 {
+            hdr_render_target: &hdr_render_target_view,
+            hdr_render_target_sampler: &hdr_render_target_sampler,
+            total_luminance_pixels_per_thread: &total_luminance_pixels_per_thread_buffer,
+            total_luminance_intermediate: &total_luminance_intermediate_buffer,
+            average_luminance: &average_luminance_buffer,
+            auto_EV100: &auto_EV100_buffer,
+            saturating_luminance: &saturating_luminance_buffer,
+        },
+    );
 
     let mut tone_mapping_enabled = true;
     let mut tone_mapping_enabled_updated = false;
@@ -1004,104 +607,21 @@ fn main() {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-    let tone_mapping_pipeline_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("tone_mapping_pipeline_bind_group"),
-        layout: &tone_mapping_pipeline_bind_group_layout,
-        entries: &[
-            // @group(0) @binding(0)
-            // var hdr_render_target: texture_2d<f32>;
-            wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&hdr_render_target_view),
-            },
-            // @group(0) @binding(1)
-            // var hdr_render_target_sampler: sampler;
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::Sampler(&hdr_render_target_sampler),
-            },
-            // @group(0) @binding(2)
-            // var<uniform> tone_mapping_enabled: u32;
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &tone_mapping_enabled_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-            // @group(0) @binding(3)
-            // var<storage, read> saturating_luminance: f32;
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &saturating_luminance_buffer,
-                    offset: 0,
-                    size: None,
-                }),
-            },
-        ],
-    });
-
-    let tone_mapping_pipeline_layout =
-        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("tone_mapping_pipeline_layout"),
-            bind_group_layouts: &[&tone_mapping_pipeline_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-    let tone_mapping_shader_module =
-        device.create_shader_module(wgpu::include_wgsl!("tone_mapping.wgsl"));
-    let tone_mapping_vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("tone_mapping_vertices"),
-        contents: bytemuck::cast_slice(&[
-            Vec2 { x: 1.0, y: 1.0 },
-            Vec2 { x: -1.0, y: -1.0 },
-            Vec2 { x: 1.0, y: -1.0 },
-            Vec2 { x: 1.0, y: 1.0 },
-            Vec2 { x: -1.0, y: 1.0 },
-            Vec2 { x: -1.0, y: -1.0 },
-        ]),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-    let tone_mapping_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("tone_mapping_pipeline"),
-        layout: Some(&tone_mapping_pipeline_layout),
-        vertex: wgpu::VertexState {
-            module: &tone_mapping_shader_module,
-            entry_point: "vertex_main",
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<Vec2>() as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 0,
-                    shader_location: 0,
-                }],
-            }],
+    let tone_mapping = ToneMapping::new(
+        &device,
+        surface_format,
+        tone_mapping::BindGroup0 {
+            hdr_render_target: &hdr_render_target_view,
+            hdr_render_target_sampler: &hdr_render_target_sampler,
+            tone_mapping_enabled: &tone_mapping_enabled_buffer,
+            saturating_luminance: &saturating_luminance_buffer,
         },
-        fragment: Some(wgpu::FragmentState {
-            module: &tone_mapping_shader_module,
-            entry_point: "fragment_main",
-            targets: &[Some(wgpu::ColorTargetState {
-                format: surface_format,
-                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
-            strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: Some(wgpu::Face::Back),
-            unclipped_depth: false,
-            polygon_mode: wgpu::PolygonMode::Fill,
-            conservative: false,
-        },
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview: None,
-    });
+    );
+
+    let mut w_held = false;
+    let mut a_held = false;
+    let mut s_held = false;
+    let mut d_held = false;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -1252,113 +772,18 @@ fn main() {
                     let mut command_encoder =
                         device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-                    {
-                        /* What is an "attachment"?
-
-                        My current understanding is that a (render pass) attachment is a description of a memory region
-                        used in the render pass (either as input or output).
-
-                        So the `RenderPassColorAttachment`s describe color output locations for the render pass. I suppose
-                        the "depth" component of the `RenderPassDepthStencilAttachment` is for the [Z-buffer](https://en.wikipedia.org/wiki/Z-buffering).
-                        What's this "stencil" thing? I'm guessing it's for a [Stencil Buffer](https://en.wikipedia.org/wiki/Stencil_buffer). Don't know
-                        what that's for (yet!).
-
-                        Hypothesis: the `RenderPassColorAttachment`s set up outputs for the render pass' fragment shader.
-                        Answer: yes, that is the case. If I wanted to emit more information from the fragment shader, then
-                        I could add another color attachment and write to it at `@location(1)` in the fragment shader. I think
-                        I'd also need to add another entry to `FragmentState.targets` in the corresponding `RenderPipeline`.
-
-                        See also: <https://stackoverflow.com/questions/46384007/what-is-the-meaning-of-attachment-when-speaking-about-the-vulkan-api>
-                        */
-                        let mut render_pass =
-                            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("render_pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &hdr_render_target_view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                                            r: 10_000.0 * (97.0_f64 / 255.0).powf(2.2),
-                                            g: 10_000.0 * (180.0_f64 / 255.0).powf(2.2),
-                                            b: 10_000.0 * (237.0_f64 / 255.0).powf(2.2),
-                                            a: 1.0,
-                                        }),
-                                        store: true,
-                                    },
-                                })],
-                                depth_stencil_attachment: Some(
-                                    wgpu::RenderPassDepthStencilAttachment {
-                                        view: &depth_texture_view,
-                                        depth_ops: Some(wgpu::Operations {
-                                            load: wgpu::LoadOp::Clear(1.0),
-                                            // What effect does this have? Is it overwritten by `depth_write_enabled`?
-                                            store: false,
-                                        }),
-                                        stencil_ops: None,
-                                    },
-                                ),
-                            });
-
-                        render_pass.set_pipeline(&render_pipeline);
-                        render_pass.set_vertex_buffer(0, vertex_buffer.as_raw_slice());
-                        render_pass.set_bind_group(0, &render_bind_group, &[]);
-                        render_pass.draw(0..vertex_buffer.len() as u32, 0..1);
-                    }
+                    render_hdr.record(
+                        &mut command_encoder,
+                        &hdr_render_target_view,
+                        &depth_texture_view,
+                        &vertex_buffer,
+                    );
 
                     if tone_mapping_enabled {
-                        let mut compute_pass =
-                            command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                                label: Some("luminance_pass"),
-                            });
-
-                        compute_pass.set_bind_group(0, &luminance_pass_bind_group_0, &[]);
-
-                        compute_pass.set_pipeline(&calculate_total_luminance_intermediate_pipeline);
-                        // To dispatch a single workgroup, dispatch (1, 1, 1).
-                        // If any of the dispatch dimensions are zero then the pipeline won't run.
-                        compute_pass.dispatch_workgroups(1, 1, 1);
-
-                        compute_pass.set_pipeline(&calculate_average_luminance_pipeline);
-                        compute_pass.dispatch_workgroups(1, 1, 1);
+                        luminance.record(&mut command_encoder);
                     }
 
-                    {
-                        /* I originally tried to do tone mapping + output to the frame buffer from a compute shader.
-                        It didn't work because I can't use the surface texture as a writeable storage texture.
-                        `winit` gives me a surface that supports `Bgra8unorm` and `Bgra8unormSrgb`, which aren't supported
-                        by `wgpu` as storage texture formats.
-
-                        I work around this by drawing a quad that covers the whole screen and using a fragment shader
-                        to perform tone mapping for each pixel of the frame buffer.
-
-                        See:
-                        * <https://github.com/gfx-rs/wgpu/issues/3359>
-                        * <https://github.com/gfx-rs/naga/issues/2195>
-                         */
-                        let mut render_pass =
-                            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("tone_mapping_pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &surface_texture_view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                                            r: 0.0,
-                                            g: 0.0,
-                                            b: 0.0,
-                                            a: 1.0,
-                                        }),
-                                        store: true,
-                                    },
-                                })],
-                                depth_stencil_attachment: None,
-                            });
-
-                        render_pass.set_pipeline(&tone_mapping_pipeline);
-                        render_pass.set_bind_group(0, &tone_mapping_pipeline_bind_group, &[]);
-                        render_pass.set_vertex_buffer(0, tone_mapping_vertices.slice(..));
-                        render_pass.draw(0..6, 0..1);
-                    }
+                    tone_mapping.record(&mut command_encoder, &surface_texture_view);
 
                     command_encoder.finish()
                 };

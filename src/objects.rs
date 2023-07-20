@@ -14,7 +14,12 @@ pub struct Objects(GpuBuffer<ObjectData>);
 
 impl Objects {
     pub fn new(device: &wgpu::Device, capacity: u32) -> Self {
-        Objects(GpuBuffer::new(device, Some("objects"), capacity))
+        Objects(GpuBuffer::new(
+            device,
+            Some("objects"),
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            capacity,
+        ))
     }
 
     pub fn insert(&mut self, queue: &wgpu::Queue, data: ObjectData) -> ObjectId {

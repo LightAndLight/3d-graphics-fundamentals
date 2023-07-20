@@ -3,15 +3,18 @@ use std::time::{Duration, Instant};
 use it::{
     camera::Camera,
     color::Color,
+    gpu_buffer::GpuBuffer,
     light::{DirectionalLight, PointLight},
     load::load_model,
     luminance::{self, Luminance},
     material::{Material, MaterialId, Materials},
+    matrix::Matrix4,
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
     render_hdr::{self, RenderHdr},
+    shadow_maps::{self, ShadowMaps},
     tone_mapping::{self, ToneMapping},
-    vector::Vec3,
+    vector::{Vec2, Vec3},
     vertex::Vertex,
     vertex_buffer::VertexBuffer,
 };
@@ -153,6 +156,96 @@ fn square_camera_space(object_id: ObjectId, material_id: MaterialId, side: f32) 
                 x: 0.0,
                 y: 0.0,
                 z: 1.0,
+            },
+            material_id,
+        },
+    ]
+}
+
+fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
+    let side_over_2 = side / 2.0;
+    vec![
+        Vertex {
+            position: Point3 {
+                x: side_over_2,
+                y: 0.0,
+                z: -side_over_2,
+            },
+            object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            material_id,
+        },
+        Vertex {
+            position: Point3 {
+                x: -side_over_2,
+                y: 0.0,
+                z: side_over_2,
+            },
+            object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            material_id,
+        },
+        Vertex {
+            position: Point3 {
+                x: side_over_2,
+                y: 0.0,
+                z: side_over_2,
+            },
+            object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            material_id,
+        },
+        Vertex {
+            position: Point3 {
+                x: side_over_2,
+                y: 0.0,
+                z: -side_over_2,
+            },
+            object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            material_id,
+        },
+        Vertex {
+            position: Point3 {
+                x: -side_over_2,
+                y: 0.0,
+                z: -side_over_2,
+            },
+            object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            material_id,
+        },
+        Vertex {
+            position: Point3 {
+                x: -side_over_2,
+                y: 0.0,
+                z: side_over_2,
+            },
+            object_id,
+            normal: Vec3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
             },
             material_id,
         },
@@ -308,6 +401,20 @@ fn main() {
             _padding: [0, 0],
         },
     );
+    let grey_material = materials.insert(
+        &queue,
+        Material {
+            color: Color {
+                r: 0.5,
+                g: 0.5,
+                b: 0.5,
+                a: 1.0,
+            },
+            roughness: 0.5,
+            metallic: 0.0,
+            _padding: [0, 0],
+        },
+    );
 
     let mut vertex_buffer = VertexBuffer::new(&device, 100000);
     {
@@ -341,6 +448,21 @@ fn main() {
             &queue,
             &square_camera_space(object_id, green_material, 0.25),
         );
+    }
+
+    {
+        let object_id = objects.insert(
+            &queue,
+            ObjectData {
+                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                    x: 0.0,
+                    y: -2.0,
+                    z: 0.0,
+                })
+                .into(),
+            },
+        );
+        vertex_buffer.insert_many(&queue, &floor(object_id, grey_material, 100.0));
     }
 
     load_model(
@@ -443,6 +565,44 @@ fn main() {
     });
     let mut display_normals_updated = false;
 
+    let shadow_map_atlas_format = wgpu::TextureFormat::Depth32Float;
+    let shadow_map_atlas = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("shadow_map_atlas"),
+        size: wgpu::Extent3d {
+            width: 1024,
+            height: 1024,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: shadow_map_atlas_format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let shadow_map_atlas_view =
+        shadow_map_atlas.create_view(&wgpu::TextureViewDescriptor::default());
+    let shadow_map_atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("shadow_map_atlas_sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: 0.0,
+        compare: Some(wgpu::CompareFunction::LessEqual),
+        anisotropy_clamp: 1,
+        border_color: None,
+    });
+
+    let mut point_lights_buffer: GpuBuffer<PointLight> = GpuBuffer::new(
+        &device,
+        Some("point_lights"),
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        10,
+    );
     let point_light_id = objects.insert(
         &queue,
         ObjectData {
@@ -454,10 +614,9 @@ fn main() {
             .into(),
         },
     );
-    let point_lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("point_lights"),
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        contents: bytemuck::cast_slice(&[PointLight {
+    point_lights_buffer.insert(
+        &queue,
+        PointLight {
             object_id: point_light_id,
             _padding0: [0, 0, 0],
             color: Color {
@@ -468,22 +627,55 @@ fn main() {
             },
             luminous_power: 6e5,
             _padding1: [0, 0, 0],
-        }]),
-    });
+        },
+    );
 
-    let directional_lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("directional_lights"),
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        contents: bytemuck::cast_slice(&[DirectionalLight {
-            color: Color::WHITE,
-            direction: Vec3 {
-                x: 1.0,
-                y: -1.0,
-                z: -0.2,
+    let mut directional_lights_buffer: GpuBuffer<DirectionalLight> = GpuBuffer::new(
+        &device,
+        Some("directional_lights"),
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        10,
+    );
+    let mut shadowing_directional_lights_buffer: GpuBuffer<shadow_maps::DirectionalLight> =
+        GpuBuffer::new(
+            &device,
+            Some("shadowing_directional_lights"),
+            wgpu::BufferUsages::UNIFORM
+                | wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST,
+            10,
+        );
+    let mut directional_light_shadow_map_atlas_entries = Vec::new();
+    {
+        let direction = Vec3 {
+            x: 1.0,
+            y: -1.0,
+            z: -0.2,
+        };
+        directional_lights_buffer.insert(
+            &queue,
+            DirectionalLight {
+                color: Color::WHITE,
+                direction,
+                illuminance: 110_000.0,
             },
-            illuminance: 110_000.0,
-        }]),
-    });
+        );
+        let shadow_map_atlas_entry_size = 512.0;
+        let id = shadowing_directional_lights_buffer.insert(
+            &queue,
+            shadow_maps::DirectionalLight {
+                view: Matrix4::look_to(Point3::ZERO, direction, Vec3::Y),
+                projection: Matrix4::ortho(-15.0, -5.0, -5.0, 5.0, -5.0, 5.0),
+                shadow_map_atlas_position: [0.0, 0.0],
+                shadow_map_atlas_size: [shadow_map_atlas_entry_size, shadow_map_atlas_entry_size],
+            },
+        );
+        directional_light_shadow_map_atlas_entries.push(shadow_maps::ShadowMapAtlasEntry {
+            shadowing_directional_light_id: id,
+            position: Vec2 { x: 0.0, y: 0.0 },
+            size: shadow_map_atlas_entry_size,
+        });
+    }
 
     /*
     A floating point depth buffer is pretty important for working with a high `camera.near` to
@@ -523,6 +715,15 @@ fn main() {
         array_layer_count: None,
     });
 
+    let shadow_maps = ShadowMaps::new(
+        &device,
+        shadow_map_atlas_format,
+        shadow_maps::BindGroup0 {
+            directional_lights: &shadowing_directional_lights_buffer,
+            objects: &objects,
+        },
+    );
+
     let render_hdr = RenderHdr::new(
         &device,
         hdr_render_target_format,
@@ -534,6 +735,9 @@ fn main() {
             point_lights: &point_lights_buffer,
             directional_lights: &directional_lights_buffer,
             materials: &materials,
+            shadow_map_atlas: &shadow_map_atlas_view,
+            shadow_map_atlas_sampler: &shadow_map_atlas_sampler,
+            shadowing_directional_lights: &shadowing_directional_lights_buffer,
         },
     );
 
@@ -771,6 +975,13 @@ fn main() {
                 let commands = {
                     let mut command_encoder =
                         device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+                    shadow_maps.record(
+                        &mut command_encoder,
+                        &shadow_map_atlas_view,
+                        &directional_light_shadow_map_atlas_entries,
+                        &vertex_buffer,
+                    );
 
                     render_hdr.record(
                         &mut command_encoder,

@@ -9,6 +9,7 @@ pub mod matrix;
 pub mod objects;
 pub mod point;
 pub mod render_hdr;
+pub mod shadow_maps;
 pub mod tone_mapping;
 pub mod vector;
 pub mod vertex;

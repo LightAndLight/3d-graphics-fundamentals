@@ -57,6 +57,22 @@ struct Material{
 @group(0) @binding(5)
 var<storage, read> materials: array<Material>;
 
+@group(0) @binding(6)
+var shadow_map_atlas: texture_depth_2d;
+
+@group(0) @binding(7)
+var shadow_map_atlas_sampler: sampler_comparison;
+
+struct ShadowingDirectionalLight{
+  view: mat4x4<f32>,
+  projection: mat4x4<f32>,
+  shadow_map_atlas_position: vec2<f32>,
+  shadow_map_atlas_size: vec2<f32>
+}
+
+@group(0) @binding(8)
+var<storage, read> shadowing_directional_lights: array<ShadowingDirectionalLight>;
+
 fn srgb_to_linear_scalar(srgb: f32) -> f32 {
   if srgb <= 0.04045 {
     return srgb / 12.92;
@@ -246,12 +262,40 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     
     for (var i: u32 = 0u; i < arrayLength(&directional_lights); i++) {
       let directional_light = directional_lights[i];
+      let shadowing_directional_light = shadowing_directional_lights[i];
 
       let light_direction: vec3<f32> = -directional_light.direction; 
       
       let light_color = srgb_to_linear(directional_light.color);
 
+      let fragment_light_space = 
+        shadowing_directional_light.projection *
+        shadowing_directional_light.view *
+        // vec4<f32>(input.world_position + 0.005 * surface_normal, 1.0);
+        vec4<f32>(input.world_position, 1.0);
+      let fragment_depth = fragment_light_space.z / fragment_light_space.w;
+
+      let shadow_map_atlas_dimensions = textureDimensions(shadow_map_atlas);
+      
+      let shadow_map_start_u = shadowing_directional_light.shadow_map_atlas_position.x / f32(shadow_map_atlas_dimensions.x);
+      let shadow_map_start_v = shadowing_directional_light.shadow_map_atlas_position.y / f32(shadow_map_atlas_dimensions.y);
+      
+      let shadow_map_size_u = shadowing_directional_light.shadow_map_atlas_size.x / f32(shadow_map_atlas_dimensions.x);
+      let shadow_map_size_v = shadowing_directional_light.shadow_map_atlas_size.y / f32(shadow_map_atlas_dimensions.y);
+
+      let shadow_map_offset_u = shadow_map_size_u * (fragment_light_space.x + 1.0) / 2.0;
+      let shadow_map_offset_v = shadow_map_size_v * (-fragment_light_space.y + 1.0) / 2.0;
+
       luminance +=
+        textureSampleCompare(
+          shadow_map_atlas,
+          shadow_map_atlas_sampler,
+          vec2<f32>(
+            shadow_map_start_u + shadow_map_offset_u,
+            shadow_map_start_v + shadow_map_offset_v
+          ),
+          fragment_depth // - 0.05 * dot(light_direction, surface_normal)
+        ) *
         PI *
         brdf(
           surface_normal,

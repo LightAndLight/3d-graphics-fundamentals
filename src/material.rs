@@ -17,7 +17,12 @@ pub struct Materials(GpuBuffer<Material>);
 
 impl Materials {
     pub fn new(device: &wgpu::Device, capacity: u32) -> Self {
-        Materials(GpuBuffer::new(device, Some("materials"), capacity))
+        Materials(GpuBuffer::new(
+            device,
+            Some("materials"),
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            capacity,
+        ))
     }
 
     pub fn insert(&mut self, queue: &wgpu::Queue, data: Material) -> MaterialId {

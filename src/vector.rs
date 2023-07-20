@@ -13,6 +13,12 @@ impl Vec3 {
         z: 0.0,
     };
 
+    pub const Y: Self = Vec3 {
+        x: 0.0,
+        y: 1.0,
+        z: 0.0,
+    };
+
     pub fn cross(self, rhs: Self) -> Self {
         cgmath::Vector3::<f32>::from(self)
             .cross(cgmath::Vector3::<f32>::from(rhs))

@@ -1,4 +1,12 @@
-use crate::{material::Materials, objects::Objects, vertex::Vertex, vertex_buffer::VertexBuffer};
+use crate::{
+    gpu_buffer::GpuBuffer,
+    light::{DirectionalLight, PointLight},
+    material::Materials,
+    objects::Objects,
+    shadow_maps,
+    vertex::Vertex,
+    vertex_buffer::VertexBuffer,
+};
 
 pub struct RenderHdr {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
@@ -147,9 +155,12 @@ pub struct BindGroup0<'a> {
     pub camera: &'a wgpu::Buffer,
     pub objects: &'a Objects,
     pub display_normals: &'a wgpu::Buffer,
-    pub point_lights: &'a wgpu::Buffer,
-    pub directional_lights: &'a wgpu::Buffer,
+    pub point_lights: &'a GpuBuffer<PointLight>,
+    pub directional_lights: &'a GpuBuffer<DirectionalLight>,
     pub materials: &'a Materials,
+    pub shadow_map_atlas: &'a wgpu::TextureView,
+    pub shadow_map_atlas_sampler: &'a wgpu::Sampler,
+    pub shadowing_directional_lights: &'a GpuBuffer<shadow_maps::DirectionalLight>,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -239,7 +250,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.point_lights,
+                    buffer: self.point_lights.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -262,7 +273,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 4,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.directional_lights,
+                    buffer: self.directional_lights.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -292,6 +303,63 @@ impl<'a> BindGroup0<'a> {
             },
         );
 
+        // @group(0) @binding(6)
+        // var shadow_map_atlas: texture_depth_2d<f32>;
+        let shadow_map_atlas = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 6,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Depth,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: wgpu::BindingResource::TextureView(self.shadow_map_atlas),
+            },
+        );
+
+        // @group(0) @binding(7)
+        // var shadow_map_atlas_sampler: sampler_comparison;
+        let shadow_map_atlas_sampler = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 7,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: wgpu::BindingResource::Sampler(self.shadow_map_atlas_sampler),
+            },
+        );
+
+        // @group(0) @binding(8)
+        // var<storage, read> shadowing_directional_lights: array<ShadowingDirectionalLight>;
+        let shadowing_directional_lights = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 8,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: self.shadowing_directional_lights.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        );
+
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("render_hdr_bind_group_layout_0"),
             entries: &[
@@ -301,6 +369,9 @@ impl<'a> BindGroup0<'a> {
                 point_lights.0,
                 directional_lights.0,
                 materials.0,
+                shadow_map_atlas.0,
+                shadow_map_atlas_sampler.0,
+                shadowing_directional_lights.0,
             ],
         });
 
@@ -314,6 +385,9 @@ impl<'a> BindGroup0<'a> {
                 point_lights.1,
                 directional_lights.1,
                 materials.1,
+                shadow_map_atlas.1,
+                shadow_map_atlas_sampler.1,
+                shadowing_directional_lights.1,
             ],
         });
 

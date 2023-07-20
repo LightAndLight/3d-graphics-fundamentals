@@ -20,8 +20,7 @@
   * [x] Physical light units, manual exposure
   * [x] Tone mapping
   * [x] Automatic exposure using average scene luminance
-* [ ] Self-shadowing
-* [ ] Add shadows via shadow mapping
+* [ ] Shadow maps
 * [ ] Anti-aliasing
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer

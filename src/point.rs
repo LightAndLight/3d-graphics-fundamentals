@@ -51,3 +51,13 @@ impl From<cgmath::Point3<f32>> for Point3 {
         }
     }
 }
+
+impl From<Point3> for cgmath::Point3<f32> {
+    fn from(value: Point3) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+            z: value.z,
+        }
+    }
+}

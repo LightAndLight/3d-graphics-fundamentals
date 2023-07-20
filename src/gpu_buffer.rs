@@ -6,11 +6,16 @@ pub struct GpuBuffer<T> {
 }
 
 impl<T: Sized + bytemuck::Pod> GpuBuffer<T> {
-    pub fn new(device: &wgpu::Device, label: Option<&str>, capacity: u32) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        label: Option<&str>,
+        usage: wgpu::BufferUsages,
+        capacity: u32,
+    ) -> Self {
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label,
             size: capacity as u64 * std::mem::size_of::<T>() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            usage,
             mapped_at_creation: false,
         });
         Self {
@@ -43,5 +48,13 @@ impl<T: Sized + bytemuck::Pod> GpuBuffer<T> {
 
     pub fn as_raw_buffer(&self) -> &wgpu::Buffer {
         &self.buffer
+    }
+
+    pub fn len(&self) -> u32 {
+        self.size
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.size == 0
     }
 }

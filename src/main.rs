@@ -410,7 +410,7 @@ fn main() {
                 b: 0.5,
                 a: 1.0,
             },
-            roughness: 0.5,
+            roughness: 0.8,
             metallic: 0.0,
             _padding: [0, 0],
         },
@@ -456,7 +456,7 @@ fn main() {
             ObjectData {
                 transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
                     x: 0.0,
-                    y: -2.0,
+                    y: -2.5,
                     z: 0.0,
                 })
                 .into(),
@@ -569,8 +569,8 @@ fn main() {
     let shadow_map_atlas = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("shadow_map_atlas"),
         size: wgpu::Extent3d {
-            width: 1024,
-            height: 1024,
+            width: 4096,
+            height: 4096,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -660,7 +660,7 @@ fn main() {
                 illuminance: 110_000.0,
             },
         );
-        let shadow_map_atlas_entry_size = 512.0;
+        let shadow_map_atlas_entry_size = 4096.0;
         let id = shadowing_directional_lights_buffer.insert(
             &queue,
             shadow_maps::DirectionalLight {

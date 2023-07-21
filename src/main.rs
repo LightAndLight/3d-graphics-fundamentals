@@ -660,7 +660,7 @@ fn main() {
                 illuminance: 110_000.0,
             },
         );
-        let shadow_map_atlas_entry_size = 4096.0;
+        let shadow_map_atlas_entry_size = 1024.0;
         let id = shadowing_directional_lights_buffer.insert(
             &queue,
             shadow_maps::DirectionalLight {

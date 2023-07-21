@@ -274,25 +274,27 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         vec4<f32>(input.world_position, 1.0);
       let fragment_depth = fragment_light_space.z / fragment_light_space.w;
 
-      let shadow_map_atlas_dimensions = textureDimensions(shadow_map_atlas);
+      let shadow_map_atlas_dimensions = vec2<f32>(textureDimensions(shadow_map_atlas));
       
-      let shadow_map_start_u = shadowing_directional_light.shadow_map_atlas_position.x / f32(shadow_map_atlas_dimensions.x);
-      let shadow_map_start_v = shadowing_directional_light.shadow_map_atlas_position.y / f32(shadow_map_atlas_dimensions.y);
+      let shadow_map_entry_start_uv =
+        shadowing_directional_light.shadow_map_atlas_position / shadow_map_atlas_dimensions;
       
-      let shadow_map_size_u = shadowing_directional_light.shadow_map_atlas_size.x / f32(shadow_map_atlas_dimensions.x);
-      let shadow_map_size_v = shadowing_directional_light.shadow_map_atlas_size.y / f32(shadow_map_atlas_dimensions.y);
+      let shadow_map_entry_size_uv =
+        shadowing_directional_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
 
-      let shadow_map_offset_u = shadow_map_size_u * (fragment_light_space.x + 1.0) / 2.0;
-      let shadow_map_offset_v = shadow_map_size_v * (-fragment_light_space.y + 1.0) / 2.0;
+      let shadow_map_offset_uv =
+        shadow_map_entry_size_uv * (fragment_light_space.xy * vec2<f32>(1.0, -1.0) + vec2<f32>(1.0))
+        /
+        vec2<f32>(2.0);
+
+      let shadow_map_sample_coords =
+        shadow_map_entry_start_uv + shadow_map_offset_uv;
 
       luminance +=
         textureSampleCompare(
           shadow_map_atlas,
           shadow_map_atlas_sampler,
-          vec2<f32>(
-            shadow_map_start_u + shadow_map_offset_u,
-            shadow_map_start_v + shadow_map_offset_v
-          ),
+          shadow_map_sample_coords,
           fragment_depth
         ) *
         PI *

@@ -271,7 +271,6 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
       let fragment_light_space = 
         shadowing_directional_light.projection *
         shadowing_directional_light.view *
-        // vec4<f32>(input.world_position + 0.005 * surface_normal, 1.0);
         vec4<f32>(input.world_position, 1.0);
       let fragment_depth = fragment_light_space.z / fragment_light_space.w;
 
@@ -294,7 +293,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
             shadow_map_start_u + shadow_map_offset_u,
             shadow_map_start_v + shadow_map_offset_v
           ),
-          fragment_depth // - 0.05 * dot(light_direction, surface_normal)
+          fragment_depth
         ) *
         PI *
         brdf(

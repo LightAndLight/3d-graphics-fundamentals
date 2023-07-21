@@ -20,7 +20,9 @@
   * [x] Physical light units, manual exposure
   * [x] Tone mapping
   * [x] Automatic exposure using average scene luminance
-* [ ] Shadow maps
+* Shadow mapping
+  * [x] Basic shadow map for directional lights
+  * [ ] Light frustum fitting
 * [ ] Anti-aliasing
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
@@ -32,6 +34,7 @@
 * [ ] Bloom
 * [ ] Area lights
 * [ ] Histogram-based auto-exposure
+* [ ] Virtual/adaptive shadow maps
 
 ## For fun
 
@@ -83,6 +86,8 @@
     * <http://filmicworlds.com/blog/why-a-filmic-curve-saturates-your-blacks/>
     * <http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/>
     * <http://duikerresearch.com/2015/09/filmic-tonemapping-for-real-time-rendering/>
+* Shadow mapping
+  * <https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping>
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>
   * <http://graphics.stanford.edu/data/3Dscanrep/>

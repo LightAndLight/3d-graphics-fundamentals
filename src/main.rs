@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use cgmath::{Matrix, SquareMatrix};
 use it::{
     camera::Camera,
     color::Color,
@@ -660,14 +661,25 @@ fn main() {
                 illuminance: 110_000.0,
             },
         );
-        let shadow_map_atlas_entry_size = 4096.0;
+        let shadow_map_atlas_entry_size = 1024.0;
+        let view = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y);
+        let projection = Matrix4::ortho(-15.0, -5.0, -5.0, 5.0, -5.0, 5.0);
         let id = shadowing_directional_lights_buffer.insert(
             &queue,
             shadow_maps::DirectionalLight {
-                view: Matrix4::look_to(Point3::ZERO, direction, Vec3::Y),
-                projection: Matrix4::ortho(-15.0, -5.0, -5.0, 5.0, -5.0, 5.0),
-                shadow_map_atlas_position: [0.0, 0.0],
-                shadow_map_atlas_size: [shadow_map_atlas_entry_size, shadow_map_atlas_entry_size],
+                view,
+                projection,
+                shadow_map_atlas_entry_position: [0.0, 0.0],
+                shadow_map_atlas_entry_size: [
+                    shadow_map_atlas_entry_size,
+                    shadow_map_atlas_entry_size,
+                ],
+                projview_normals: dbg!((cgmath::Matrix4::<f32>::from(projection)
+                    * cgmath::Matrix4::<f32>::from(view))
+                .invert()
+                .unwrap()
+                .transpose()
+                .into()),
             },
         );
         directional_light_shadow_map_atlas_entries.push(shadow_maps::ShadowMapAtlasEntry {

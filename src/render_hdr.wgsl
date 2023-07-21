@@ -63,11 +63,13 @@ var shadow_map_atlas: texture_depth_2d;
 @group(0) @binding(7)
 var shadow_map_atlas_sampler: sampler_comparison;
 
+// Originally defined as `shadow_maps.wgsl:DirectionalLight`
 struct ShadowingDirectionalLight{
   view: mat4x4<f32>,
   projection: mat4x4<f32>,
-  shadow_map_atlas_position: vec2<f32>,
-  shadow_map_atlas_size: vec2<f32>
+  shadow_map_atlas_entry_position: vec2<f32>,
+  shadow_map_atlas_entry_size: vec2<f32>,
+  projview_normals: mat4x4<f32>
 }
 
 @group(0) @binding(8)
@@ -106,7 +108,7 @@ fn vertex_main(input: VertexInput) -> VertexOutput {
   output.position = camera.view_proj * world_position;
 
   // Nothing told me that I was forgetting to attach normals!
-  // The normal can only get passed through for translations.
+  // The normal can only get passed through when `object.transform` is a translation.
   output.normal = input.normal;
 
   if display_normals == 1u {
@@ -229,6 +231,8 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let albedo = input.albedo;
     let roughness = input.roughness;
     let metallic = input.metallic;
+
+    let shadow_map_atlas_dimensions = textureDimensions(shadow_map_atlas);
     
     var luminance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
       
@@ -268,34 +272,85 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
       
       let light_color = srgb_to_linear(directional_light.color);
 
-      let fragment_light_space = 
+
+      let shadowing_directional_light_projview =
         shadowing_directional_light.projection *
-        shadowing_directional_light.view *
-        // vec4<f32>(input.world_position + 0.005 * surface_normal, 1.0);
+        shadowing_directional_light.view;
+      let fragment_light_space_4 = 
+        shadowing_directional_light_projview *
         vec4<f32>(input.world_position, 1.0);
-      let fragment_depth = fragment_light_space.z / fragment_light_space.w;
+      let fragment_light_space = fragment_light_space_4.xyz / fragment_light_space_4.w;
 
       let shadow_map_atlas_dimensions = textureDimensions(shadow_map_atlas);
       
-      let shadow_map_start_u = shadowing_directional_light.shadow_map_atlas_position.x / f32(shadow_map_atlas_dimensions.x);
-      let shadow_map_start_v = shadowing_directional_light.shadow_map_atlas_position.y / f32(shadow_map_atlas_dimensions.y);
+      let shadow_map_start_u = shadowing_directional_light.shadow_map_atlas_entry_position.x / f32(shadow_map_atlas_dimensions.x);
+      let shadow_map_start_v = shadowing_directional_light.shadow_map_atlas_entry_position.y / f32(shadow_map_atlas_dimensions.y);
       
-      let shadow_map_size_u = shadowing_directional_light.shadow_map_atlas_size.x / f32(shadow_map_atlas_dimensions.x);
-      let shadow_map_size_v = shadowing_directional_light.shadow_map_atlas_size.y / f32(shadow_map_atlas_dimensions.y);
+      let shadow_map_size_u = shadowing_directional_light.shadow_map_atlas_entry_size.x / f32(shadow_map_atlas_dimensions.x);
+      let shadow_map_size_v = shadowing_directional_light.shadow_map_atlas_entry_size.y / f32(shadow_map_atlas_dimensions.y);
 
       let shadow_map_offset_u = shadow_map_size_u * (fragment_light_space.x + 1.0) / 2.0;
       let shadow_map_offset_v = shadow_map_size_v * (-fragment_light_space.y + 1.0) / 2.0;
 
+      let texel_u = 1.0 / f32(shadow_map_atlas_dimensions.x);
+      let texel_v = 1.0 / f32(shadow_map_atlas_dimensions.y);
+
+      let fragment_uv = vec2<f32>(
+        shadow_map_start_u + shadow_map_offset_u,
+        shadow_map_start_v + shadow_map_offset_v
+      );
+
+      let texel_size = vec2<f32>(texel_u, texel_v);
+
+      let fragment_centered_uv =
+        texel_size * trunc(fragment_uv / texel_size) +
+        vec2<f32>(0.5) * texel_size;
+
+      let fragment_centered_light_space = vec3<f32>(
+        fragment_centered_uv * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0),
+        0.0
+      );
+
+      let surface_normal_light_space = normalize(
+        // `projview_normals` *could* be a 3x3 matrix, but I've made it a 4x4 matrix because it
+        // works better with WGLSL's alignment rules.
+        (shadowing_directional_light.projview_normals * vec4<f32>(surface_normal, 0.0)).xyz
+      );
+      let t = 
+        dot(fragment_centered_light_space - fragment_light_space, surface_normal_light_space)
+        /
+        dot(directional_light.direction, surface_normal_light_space);
+
+      var fragment_depth = fragment_light_space.z;
+      if t >= 0.0 {
+        fragment_depth = (fragment_centered_light_space + vec3<f32>(t) * directional_light.direction).z - 0.005;
+      };
+
+      /*
+      var lit: f32 = 0.0;
+      for (var u: f32 = -1.0; u <= 1.0; u += 1.0) {
+        for (var v: f32 = -1.0; v <= 1.0; v += 1.0) {
+          lit += textureSampleCompare(
+            shadow_map_atlas,
+            shadow_map_atlas_sampler,
+            fragment_uv + vec2<f32>(u * texel_u, v * texel_v),
+            fragment_depth
+          );
+        }
+      }
+
+      lit /= 9.0;
+      */
+          
+      let lit = textureSampleCompare(
+        shadow_map_atlas,
+        shadow_map_atlas_sampler,
+        fragment_centered_uv,
+        fragment_depth
+      );
+
       luminance +=
-        textureSampleCompare(
-          shadow_map_atlas,
-          shadow_map_atlas_sampler,
-          vec2<f32>(
-            shadow_map_start_u + shadow_map_offset_u,
-            shadow_map_start_v + shadow_map_offset_v
-          ),
-          fragment_depth // - 0.05 * dot(light_direction, surface_normal)
-        ) *
+        lit *
         PI *
         brdf(
           surface_normal,

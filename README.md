@@ -83,6 +83,9 @@
     * <http://filmicworlds.com/blog/why-a-filmic-curve-saturates-your-blacks/>
     * <http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/>
     * <http://duikerresearch.com/2015/09/filmic-tonemapping-for-real-time-rendering/>
+* Shadow mapping
+  * <https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping>
+  * <https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing>
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>
   * <http://graphics.stanford.edu/data/3Dscanrep/>

@@ -304,7 +304,7 @@ impl<'a> BindGroup0<'a> {
         );
 
         // @group(0) @binding(6)
-        // var shadow_map_atlas: texture_depth_2d<f32>;
+        // var shadow_map_atlas: texture_2d<f32>;
         let shadow_map_atlas = (
             wgpu::BindGroupLayoutEntry {
                 binding: 6,
@@ -323,7 +323,7 @@ impl<'a> BindGroup0<'a> {
         );
 
         // @group(0) @binding(7)
-        // var shadow_map_atlas_sampler: sampler_comparison;
+        // var shadow_map_atlas_sampler: sampler;
         let shadow_map_atlas_sampler = (
             wgpu::BindGroupLayoutEntry {
                 binding: 7,

@@ -10,8 +10,9 @@ use crate::{
 pub struct DirectionalLight {
     pub view: Matrix4,
     pub projection: Matrix4,
-    pub shadow_map_atlas_position: [f32; 2],
-    pub shadow_map_atlas_size: [f32; 2],
+    pub shadow_map_atlas_entry_position: [f32; 2],
+    pub shadow_map_atlas_entry_size: [f32; 2],
+    pub projview_normals: Matrix4,
 }
 
 pub struct ShadowMapAtlasEntry {

@@ -1,8 +1,9 @@
 struct DirectionalLight{
   view: mat4x4<f32>,
   projection: mat4x4<f32>,
-  shadow_map_atlas_position: vec2<f32>,
-  shadow_map_atlas_size: vec2<f32>
+  shadow_map_atlas_entry_position: vec2<f32>,
+  shadow_map_atlas_entry_size: vec2<f32>,
+  projview_normals: mat4x4<f32>
 }
 
 @group(0) @binding(0)

@@ -316,36 +316,24 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         // works better with WGLSL's alignment rules.
         (shadowing_directional_light.projview_normals * vec4<f32>(surface_normal, 0.0)).xyz
       );
+
+      // In light space the light's direction is just "straight ahead". 
+      let light_direction_light_space = vec3<f32>(0.0, 0.0, 1.0);
+
       let t = 
         dot(fragment_centered_light_space - fragment_light_space, surface_normal_light_space)
         /
-        dot(directional_light.direction, surface_normal_light_space);
+        dot(light_direction_light_space, surface_normal_light_space); 
 
       var fragment_depth = fragment_light_space.z;
-      if t >= 0.0 {
-        fragment_depth = (fragment_centered_light_space + vec3<f32>(t) * directional_light.direction).z - 0.005;
+      if t >= 0.0  {
+        fragment_depth = (fragment_centered_light_space + vec3<f32>(t) * light_direction_light_space).z;
       };
-
-      /*
-      var lit: f32 = 0.0;
-      for (var u: f32 = -1.0; u <= 1.0; u += 1.0) {
-        for (var v: f32 = -1.0; v <= 1.0; v += 1.0) {
-          lit += textureSampleCompare(
-            shadow_map_atlas,
-            shadow_map_atlas_sampler,
-            fragment_uv + vec2<f32>(u * texel_u, v * texel_v),
-            fragment_depth
-          );
-        }
-      }
-
-      lit /= 9.0;
-      */
           
       let lit = textureSampleCompare(
         shadow_map_atlas,
         shadow_map_atlas_sampler,
-        fragment_centered_uv,
+        fragment_uv,
         fragment_depth
       );
 

@@ -12,6 +12,7 @@ use it::{
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
     render_hdr::{self, RenderHdr},
+    shadow_map_overlay::{self, ShadowMapOverlay},
     shadow_maps::{self, ShadowMaps},
     tone_mapping::{self, ToneMapping},
     vector::{Vec2, Vec3},
@@ -546,8 +547,8 @@ fn main() {
         },
         aspect: surface_config.width as f32 / surface_config.height as f32,
         fovy: 45.0,
-        near: 0.1,
-        far: 100.0,
+        near: 0.5,
+        far: 50.0,
     };
     let camera_move_speed: f32 = 0.05;
     let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -822,6 +823,20 @@ fn main() {
         },
     );
 
+    let shadow_map_overlay = ShadowMapOverlay::new(
+        &device,
+        surface_format,
+        depth_texture_format,
+        shadow_map_overlay::BindGroup0 {
+            camera: &camera_buffer,
+            objects: &objects,
+            directional_lights: &directional_lights_buffer,
+            shadow_map_atlas: &shadow_map_atlas_view,
+            shadow_map_atlas_sampler: &shadow_map_atlas_sampler,
+            shadowing_directional_lights: &shadowing_directional_lights_buffer,
+        },
+    );
+
     let mut w_held = false;
     let mut a_held = false;
     let mut s_held = false;
@@ -995,6 +1010,13 @@ fn main() {
                     }
 
                     tone_mapping.record(&mut command_encoder, &surface_texture_view);
+
+                    shadow_map_overlay.record(
+                        &mut command_encoder,
+                        &surface_texture_view,
+                        &depth_texture_view,
+                        &vertex_buffer,
+                    );
 
                     command_encoder.finish()
                 };

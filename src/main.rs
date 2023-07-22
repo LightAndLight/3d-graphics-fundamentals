@@ -565,7 +565,7 @@ fn main() {
     });
     let mut display_normals_updated = false;
 
-    let shadow_map_atlas_format = wgpu::TextureFormat::Depth32Float;
+    let shadow_map_atlas_format = wgpu::TextureFormat::Depth16Unorm;
     let shadow_map_atlas = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("shadow_map_atlas"),
         size: wgpu::Extent3d {

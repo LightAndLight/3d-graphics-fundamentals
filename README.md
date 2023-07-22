@@ -88,6 +88,12 @@
     * <http://duikerresearch.com/2015/09/filmic-tonemapping-for-real-time-rendering/>
 * Shadow mapping
   * <https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping>
+* Depth buffer precision / logarithmic depth buffers
+  * <https://outerra.blogspot.com/2009/08/logarithmic-z-buffer.html>
+  * <https://www.gamedev.net/blog/73/entry-2006307-tip-of-the-day-logarithmic-zbuffer-artifacts-fix/>
+  * <https://outerra.blogspot.com/2012/11/maximizing-depth-buffer-range-and.html>
+  * <https://outerra.blogspot.com/2013/07/logarithmic-depth-buffer-optimizations.html>
+  * <http://web.archive.org/web/20201113123351/https://thxforthefish.com/posts/reverse_z/>
 * Test models
   * <https://github.com/alecjacobson/common-3d-test-models>
   * <http://graphics.stanford.edu/data/3Dscanrep/>

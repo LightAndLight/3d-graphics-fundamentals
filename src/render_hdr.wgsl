@@ -129,7 +129,7 @@ struct VertexOutput{
   @location(1) normal: vec3<f32>,
   @location(2) albedo: vec4<f32>,
   @location(3) roughness: f32,
-  @location(4) metallic: f32
+  @location(4) metallic: f32,
 }
 
 const PI: f32 = 3.14159;
@@ -216,10 +216,19 @@ fn brdf(
   return diffuse + specular;
 }
 
+struct FragmentOutput{
+  @location(0) color: vec4<f32>,
+  @builtin(frag_depth) depth: f32
+}
+
 @fragment
-fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_main(input: VertexOutput) -> FragmentOutput {
+  var output: FragmentOutput; 
+  output.depth = log2(max(1e-6, 1.0 / input.position.w)) * (1.0 / log2(100.0 + 1.0));
+  
   if display_normals == 1u {
-    return input.albedo;
+    output.color = input.albedo;
+    return output;
   } else {
     let view_direction = normalize(camera.eye - input.world_position);
 
@@ -311,6 +320,7 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
         max(dot(surface_normal, light_direction), 0.0);
     }
 
-    return vec4<f32>(luminance, input.albedo.a);
+    output.color = vec4<f32>(luminance, input.albedo.a);
+    return output;
   }
 }

@@ -1,12 +1,18 @@
 use wgpu::include_wgsl;
 
 use crate::{
-    gpu_buffer::GpuBuffer,
-    light::{DirectionalLight, DirectionalLightGpu},
-    objects::Objects,
-    vertex::Vertex,
-    vertex_buffer::VertexBuffer,
+    gpu_buffer::GpuBuffer, light::DirectionalLight, matrix::Matrix4, objects::Objects,
+    vertex::Vertex, vertex_buffer::VertexBuffer,
 };
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Light {
+    pub shadow_view: Matrix4,
+    pub shadow_projection: Matrix4,
+    pub shadow_map_atlas_position: [f32; 2],
+    pub shadow_map_atlas_size: [f32; 2],
+}
 
 pub struct ShadowMaps {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
@@ -105,7 +111,7 @@ impl ShadowMaps {
             render_pass.set_bind_group(
                 0,
                 &self.bind_group_0,
-                &[directional_light.directional_light_gpu_id],
+                &[directional_light.shadow_map_light_gpu_id],
             );
             render_pass.draw(0..vertex_buffer.len() as u32, 0..1);
         }
@@ -113,7 +119,7 @@ impl ShadowMaps {
 }
 
 pub struct BindGroup0<'a> {
-    pub directional_lights: &'a GpuBuffer<DirectionalLightGpu>,
+    pub lights: &'a GpuBuffer<Light>,
     pub objects: &'a Objects,
 }
 
@@ -135,7 +141,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.directional_lights.as_raw_buffer(),
+                    buffer: self.lights.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),

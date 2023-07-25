@@ -569,6 +569,13 @@ fn main() {
     let mut shadow_map_atlas =
         ShadowMapAtlas::new(&device, wgpu::TextureFormat::Depth16Unorm, 4096);
 
+    let mut shadow_map_lights_buffer: GpuBuffer<shadow_maps::Light> = GpuBuffer::new(
+        &device,
+        Some("shadow_map_lights"),
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+        10,
+    );
+
     let mut point_lights_buffer: GpuBuffer<PointLight> = GpuBuffer::new(
         &device,
         Some("point_lights"),
@@ -605,7 +612,7 @@ fn main() {
     let mut directional_lights_buffer: GpuBuffer<DirectionalLightGpu> = GpuBuffer::new(
         &device,
         Some("directional_lights"),
-        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         10,
     );
     let mut directional_lights = Vec::new();
@@ -618,20 +625,26 @@ fn main() {
         let shadow_map_atlas_entry = shadow_map_atlas.allocate();
         let position = shadow_map_atlas_entry.position();
         let size = shadow_map_atlas_entry.size();
-        let id = directional_lights_buffer.insert(
+        let id = shadow_map_lights_buffer.insert(
             &queue,
-            DirectionalLightGpu {
-                color: Color::WHITE,
-                direction,
-                illuminance: 110_000.0,
+            shadow_maps::Light {
                 shadow_view: Matrix4::look_to(Point3::ZERO, direction, Vec3::Y),
                 shadow_projection: Matrix4::ortho(-15.0, -5.0, -5.0, 5.0, -5.0, 5.0),
                 shadow_map_atlas_position: position.into(),
                 shadow_map_atlas_size: [size, size],
             },
         );
+        directional_lights_buffer.insert(
+            &queue,
+            DirectionalLightGpu {
+                color: Color::WHITE,
+                direction,
+                illuminance: 110_000.0,
+                shadow_map_light_id: id,
+            },
+        );
         directional_lights.push(DirectionalLight {
-            directional_light_gpu_id: id,
+            shadow_map_light_gpu_id: id,
             shadow_map_atlas_entry,
         });
     }
@@ -678,7 +691,7 @@ fn main() {
         &device,
         shadow_map_atlas.texture_format(),
         shadow_maps::BindGroup0 {
-            directional_lights: &directional_lights_buffer,
+            lights: &shadow_map_lights_buffer,
             objects: &objects,
         },
     );
@@ -696,6 +709,7 @@ fn main() {
             materials: &materials,
             shadow_map_atlas: shadow_map_atlas.texture_view(),
             shadow_map_atlas_sampler: shadow_map_atlas.sampler(),
+            shadow_map_lights: &shadow_map_lights_buffer,
         },
     );
 

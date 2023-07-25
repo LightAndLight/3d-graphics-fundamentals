@@ -3,6 +3,7 @@ use crate::{
     light::{DirectionalLightGpu, PointLight},
     material::Materials,
     objects::Objects,
+    shadow_maps,
     vertex::Vertex,
     vertex_buffer::VertexBuffer,
 };
@@ -159,6 +160,7 @@ pub struct BindGroup0<'a> {
     pub materials: &'a Materials,
     pub shadow_map_atlas: &'a wgpu::TextureView,
     pub shadow_map_atlas_sampler: &'a wgpu::Sampler,
+    pub shadow_map_lights: &'a GpuBuffer<shadow_maps::Light>,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -335,6 +337,29 @@ impl<'a> BindGroup0<'a> {
             },
         );
 
+        // @group(0) @binding(8)
+        // var<storage, read> shadow_map_lights: array<ShadowMapLight>;
+        let shadow_map_lights = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 8,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: self.shadow_map_lights.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        );
+
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("render_hdr_bind_group_layout_0"),
             entries: &[
@@ -346,6 +371,7 @@ impl<'a> BindGroup0<'a> {
                 materials.0,
                 shadow_map_atlas.0,
                 shadow_map_atlas_sampler.0,
+                shadow_map_lights.0,
             ],
         });
 
@@ -361,6 +387,7 @@ impl<'a> BindGroup0<'a> {
                 materials.1,
                 shadow_map_atlas.1,
                 shadow_map_atlas_sampler.1,
+                shadow_map_lights.1,
             ],
         });
 

@@ -44,10 +44,7 @@ struct DirectionalLight{
   color: vec4<f32>,
   direction: vec3<f32>,
   illuminance: f32,
-  shadow_view: mat4x4<f32>,
-  shadow_projection: mat4x4<f32>,
-  shadow_map_atlas_position: vec2<f32>,
-  shadow_map_atlas_size: vec2<f32>
+  shadow_map_light_id: u32
 }
 
 @group(0) @binding(4)
@@ -67,6 +64,17 @@ var shadow_map_atlas: texture_depth_2d;
 
 @group(0) @binding(7)
 var shadow_map_atlas_sampler: sampler_comparison;
+
+// Originally defined in `shadow_maps.wgsl:Light`.
+struct ShadowMapLight{
+  shadow_view: mat4x4<f32>,
+  shadow_projection: mat4x4<f32>,
+  shadow_map_atlas_position: vec2<f32>,
+  shadow_map_atlas_size: vec2<f32>
+} 
+
+@group(0) @binding(8)
+var<storage, read> shadow_map_lights: array<ShadowMapLight>;
 
 fn srgb_to_linear_scalar(srgb: f32) -> f32 {
   if srgb <= 0.04045 {
@@ -266,24 +274,25 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
     
     for (var i: u32 = 0u; i < arrayLength(&directional_lights); i++) {
       let directional_light = directional_lights[i];
+      let shadow_map_light = shadow_map_lights[directional_light.shadow_map_light_id];
 
       let light_direction: vec3<f32> = -directional_light.direction; 
       
       let light_color = srgb_to_linear(directional_light.color);
 
       let fragment_light_space = 
-        directional_light.shadow_projection *
-        directional_light.shadow_view *
+        shadow_map_light.shadow_projection *
+        shadow_map_light.shadow_view *
         vec4<f32>(input.world_position, 1.0);
       let fragment_depth = fragment_light_space.z / fragment_light_space.w;
 
       let shadow_map_atlas_dimensions = vec2<f32>(textureDimensions(shadow_map_atlas));
       
       let shadow_map_entry_start_uv =
-        directional_light.shadow_map_atlas_position / shadow_map_atlas_dimensions;
+        shadow_map_light.shadow_map_atlas_position / shadow_map_atlas_dimensions;
       
       let shadow_map_entry_size_uv =
-        directional_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
+        shadow_map_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
 
       let shadow_map_offset_uv =
         shadow_map_entry_size_uv * (fragment_light_space.xy * vec2<f32>(1.0, -1.0) + vec2<f32>(1.0))

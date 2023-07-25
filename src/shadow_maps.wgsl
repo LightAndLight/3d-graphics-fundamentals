@@ -1,8 +1,4 @@
-// Originally defined in `render_hdr.wgsl:DirectionalLight`.
-struct DirectionalLight{
-  color: vec4<f32>,
-  direction: vec3<f32>,
-  illuminance: f32,
+struct Light{
   shadow_view: mat4x4<f32>,
   shadow_projection: mat4x4<f32>,
   shadow_map_atlas_position: vec2<f32>,
@@ -10,7 +6,7 @@ struct DirectionalLight{
 }
 
 @group(0) @binding(0)
-var<uniform> directional_light: DirectionalLight;
+var<uniform> light: Light;
 
 struct ObjectData{
   transform: mat4x4<f32>
@@ -30,8 +26,8 @@ struct VertexInput{
 fn vertex_main(input: VertexInput) -> @builtin(position) vec4<f32> {
   let object = objects[input.object_id];
   return
-    directional_light.shadow_projection *
-    directional_light.shadow_view *
+    light.shadow_projection *
+    light.shadow_view *
     object.transform *
     vec4<f32>(input.position, 1.0);
 }

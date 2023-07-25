@@ -39,7 +39,7 @@ impl Camera {
     pub fn to_uniform(&self) -> CameraUniform {
         CameraUniform {
             eye: self.eye.into(),
-            _padding: 0,
+            zfar: self.far,
             view_proj: self.clip_coordinates_matrix(),
         }
     }
@@ -55,6 +55,6 @@ pub struct CameraUniform {
     * <https://sotrh.github.io/learn-wgpu/showcase/alignment/>
     * <https://sotrh.github.io/learn-wgpu/intermediate/tutorial10-lighting/#the-blinn-phong-model>
     */
-    pub _padding: u32,
+    pub zfar: f32,
     pub view_proj: Matrix4,
 }

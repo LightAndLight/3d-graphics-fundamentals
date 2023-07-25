@@ -14,6 +14,7 @@ fn get_object(objects: array<ObjectData>, object_id: ObjectId) -> ObjectData {
 
 struct Camera{
   eye: vec3<f32>,
+  zfar: f32,
   view_proj: mat4x4<f32>
 }
 
@@ -224,7 +225,7 @@ struct FragmentOutput{
 @fragment
 fn fragment_main(input: VertexOutput) -> FragmentOutput {
   var output: FragmentOutput; 
-  output.depth = log2(max(1e-6, 1.0 / input.position.w)) * (1.0 / log2(100.0 + 1.0));
+  output.depth = log2(max(1e-6, 1.0 / input.position.w)) * (1.0 / log2(camera.zfar + 1.0));
   
   if display_normals == 1u {
     output.color = input.albedo;

@@ -1,24 +1,12 @@
 use wgpu::include_wgsl;
 
 use crate::{
-    gpu_buffer::GpuBuffer, matrix::Matrix4, objects::Objects, vector::Vec2, vertex::Vertex,
+    gpu_buffer::GpuBuffer,
+    light::{DirectionalLight, DirectionalLightGpu},
+    objects::Objects,
+    vertex::Vertex,
     vertex_buffer::VertexBuffer,
 };
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct DirectionalLight {
-    pub view: Matrix4,
-    pub projection: Matrix4,
-    pub shadow_map_atlas_position: [f32; 2],
-    pub shadow_map_atlas_size: [f32; 2],
-}
-
-pub struct ShadowMapAtlasEntry {
-    pub shadowing_directional_light_id: u32,
-    pub position: Vec2,
-    pub size: f32,
-}
 
 pub struct ShadowMaps {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
@@ -91,7 +79,7 @@ impl ShadowMaps {
         command_encoder: &mut wgpu::CommandEncoder,
         shadow_map_atlas: &wgpu::TextureView,
         // point_light_entries: &GpuBuffer<ShadowMapAtlasEntry>,
-        directional_light_entries: &[ShadowMapAtlasEntry],
+        directional_lights: &[DirectionalLight],
         vertex_buffer: &VertexBuffer,
     ) {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -110,19 +98,14 @@ impl ShadowMaps {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(0, vertex_buffer.as_raw_slice());
 
-        for entry in directional_light_entries.iter() {
-            render_pass.set_viewport(
-                entry.position.x,
-                entry.position.y,
-                entry.size,
-                entry.size,
-                0.0,
-                1.0,
-            );
+        for directional_light in directional_lights.iter() {
+            let position = directional_light.shadow_map_atlas_entry.position();
+            let size = directional_light.shadow_map_atlas_entry.size();
+            render_pass.set_viewport(position.x, position.y, size, size, 0.0, 1.0);
             render_pass.set_bind_group(
                 0,
                 &self.bind_group_0,
-                &[entry.shadowing_directional_light_id],
+                &[directional_light.directional_light_gpu_id],
             );
             render_pass.draw(0..vertex_buffer.len() as u32, 0..1);
         }
@@ -130,7 +113,7 @@ impl ShadowMaps {
 }
 
 pub struct BindGroup0<'a> {
-    pub directional_lights: &'a GpuBuffer<DirectionalLight>,
+    pub directional_lights: &'a GpuBuffer<DirectionalLightGpu>,
     pub objects: &'a Objects,
 }
 

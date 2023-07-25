@@ -22,6 +22,7 @@
   * [x] Automatic exposure using average scene luminance
 * Shadow mapping
   * [x] Basic shadow map for directional lights
+  * [ ] Omnidirectional shadow mapping (point lights)
   * [ ] Light frustum fitting
 * [ ] Anti-aliasing
 * Use GPU-driven techniques as much as possible

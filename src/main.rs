@@ -4,7 +4,7 @@ use it::{
     camera::Camera,
     color::Color,
     gpu_buffer::GpuBuffer,
-    light::{DirectionalLight, PointLight},
+    light::{DirectionalLight, DirectionalLightGpu, PointLight},
     load::load_model,
     luminance::{self, Luminance},
     material::{Material, MaterialId, Materials},
@@ -12,9 +12,10 @@ use it::{
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
     render_hdr::{self, RenderHdr},
+    shadow_map_atlas::ShadowMapAtlas,
     shadow_maps::{self, ShadowMaps},
     tone_mapping::{self, ToneMapping},
-    vector::{Vec2, Vec3},
+    vector::Vec3,
     vertex::Vertex,
     vertex_buffer::VertexBuffer,
 };
@@ -565,37 +566,8 @@ fn main() {
     });
     let mut display_normals_updated = false;
 
-    let shadow_map_atlas_format = wgpu::TextureFormat::Depth16Unorm;
-    let shadow_map_atlas = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("shadow_map_atlas"),
-        size: wgpu::Extent3d {
-            width: 4096,
-            height: 4096,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: shadow_map_atlas_format,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        view_formats: &[],
-    });
-    let shadow_map_atlas_view =
-        shadow_map_atlas.create_view(&wgpu::TextureViewDescriptor::default());
-    let shadow_map_atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-        label: Some("shadow_map_atlas_sampler"),
-        address_mode_u: wgpu::AddressMode::ClampToEdge,
-        address_mode_v: wgpu::AddressMode::ClampToEdge,
-        address_mode_w: wgpu::AddressMode::ClampToEdge,
-        mag_filter: wgpu::FilterMode::Nearest,
-        min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: 0.0,
-        compare: Some(wgpu::CompareFunction::LessEqual),
-        anisotropy_clamp: 1,
-        border_color: None,
-    });
+    let mut shadow_map_atlas =
+        ShadowMapAtlas::new(&device, wgpu::TextureFormat::Depth16Unorm, 4096);
 
     let mut point_lights_buffer: GpuBuffer<PointLight> = GpuBuffer::new(
         &device,
@@ -630,50 +602,37 @@ fn main() {
         },
     );
 
-    let mut directional_lights_buffer: GpuBuffer<DirectionalLight> = GpuBuffer::new(
+    let mut directional_lights_buffer: GpuBuffer<DirectionalLightGpu> = GpuBuffer::new(
         &device,
         Some("directional_lights"),
-        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
         10,
     );
-    let mut shadowing_directional_lights_buffer: GpuBuffer<shadow_maps::DirectionalLight> =
-        GpuBuffer::new(
-            &device,
-            Some("shadowing_directional_lights"),
-            wgpu::BufferUsages::UNIFORM
-                | wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_DST,
-            10,
-        );
-    let mut directional_light_shadow_map_atlas_entries = Vec::new();
+    let mut directional_lights = Vec::new();
     {
         let direction = Vec3 {
             x: 1.0,
             y: -1.0,
             z: -0.2,
         };
-        directional_lights_buffer.insert(
+        let shadow_map_atlas_entry = shadow_map_atlas.allocate();
+        let position = shadow_map_atlas_entry.position();
+        let size = shadow_map_atlas_entry.size();
+        let id = directional_lights_buffer.insert(
             &queue,
-            DirectionalLight {
+            DirectionalLightGpu {
                 color: Color::WHITE,
                 direction,
                 illuminance: 110_000.0,
+                shadow_view: Matrix4::look_to(Point3::ZERO, direction, Vec3::Y),
+                shadow_projection: Matrix4::ortho(-15.0, -5.0, -5.0, 5.0, -5.0, 5.0),
+                shadow_map_atlas_position: position.into(),
+                shadow_map_atlas_size: [size, size],
             },
         );
-        let shadow_map_atlas_entry_size = 1024.0;
-        let id = shadowing_directional_lights_buffer.insert(
-            &queue,
-            shadow_maps::DirectionalLight {
-                view: Matrix4::look_to(Point3::ZERO, direction, Vec3::Y),
-                projection: Matrix4::ortho(-15.0, -5.0, -5.0, 5.0, -5.0, 5.0),
-                shadow_map_atlas_position: [0.0, 0.0],
-                shadow_map_atlas_size: [shadow_map_atlas_entry_size, shadow_map_atlas_entry_size],
-            },
-        );
-        directional_light_shadow_map_atlas_entries.push(shadow_maps::ShadowMapAtlasEntry {
-            shadowing_directional_light_id: id,
-            position: Vec2 { x: 0.0, y: 0.0 },
-            size: shadow_map_atlas_entry_size,
+        directional_lights.push(DirectionalLight {
+            directional_light_gpu_id: id,
+            shadow_map_atlas_entry,
         });
     }
 
@@ -717,9 +676,9 @@ fn main() {
 
     let shadow_maps = ShadowMaps::new(
         &device,
-        shadow_map_atlas_format,
+        shadow_map_atlas.texture_format(),
         shadow_maps::BindGroup0 {
-            directional_lights: &shadowing_directional_lights_buffer,
+            directional_lights: &directional_lights_buffer,
             objects: &objects,
         },
     );
@@ -735,9 +694,8 @@ fn main() {
             point_lights: &point_lights_buffer,
             directional_lights: &directional_lights_buffer,
             materials: &materials,
-            shadow_map_atlas: &shadow_map_atlas_view,
-            shadow_map_atlas_sampler: &shadow_map_atlas_sampler,
-            shadowing_directional_lights: &shadowing_directional_lights_buffer,
+            shadow_map_atlas: shadow_map_atlas.texture_view(),
+            shadow_map_atlas_sampler: shadow_map_atlas.sampler(),
         },
     );
 
@@ -978,8 +936,8 @@ fn main() {
 
                     shadow_maps.record(
                         &mut command_encoder,
-                        &shadow_map_atlas_view,
-                        &directional_light_shadow_map_atlas_entries,
+                        shadow_map_atlas.texture_view(),
+                        &directional_lights,
                         &vertex_buffer,
                     );
 

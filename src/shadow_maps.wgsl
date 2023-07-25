@@ -1,6 +1,10 @@
+// Originally defined in `render_hdr.wgsl:DirectionalLight`.
 struct DirectionalLight{
-  view: mat4x4<f32>,
-  projection: mat4x4<f32>,
+  color: vec4<f32>,
+  direction: vec3<f32>,
+  illuminance: f32,
+  shadow_view: mat4x4<f32>,
+  shadow_projection: mat4x4<f32>,
   shadow_map_atlas_position: vec2<f32>,
   shadow_map_atlas_size: vec2<f32>
 }
@@ -25,7 +29,11 @@ struct VertexInput{
 @vertex
 fn vertex_main(input: VertexInput) -> @builtin(position) vec4<f32> {
   let object = objects[input.object_id];
-  return directional_light.projection * directional_light.view * object.transform * vec4<f32>(input.position, 1.0);
+  return
+    directional_light.shadow_projection *
+    directional_light.shadow_view *
+    object.transform *
+    vec4<f32>(input.position, 1.0);
 }
 
 @fragment

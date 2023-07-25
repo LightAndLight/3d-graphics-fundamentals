@@ -91,3 +91,9 @@ pub struct Vec2 {
     pub x: f32,
     pub y: f32,
 }
+
+impl From<Vec2> for [f32; 2] {
+    fn from(value: Vec2) -> Self {
+        [value.x, value.y]
+    }
+}

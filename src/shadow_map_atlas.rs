@@ -74,7 +74,7 @@ impl ShadowMapAtlas {
 
     pub fn allocate(&mut self) -> ShadowMapAtlasEntry {
         if self.capacity_x - self.size_x >= ENTRY_SIZE {
-            self.size_x += ENTRY_SIZE;
+            // pass
         } else if self.capacity_y - self.size_y >= ENTRY_SIZE {
             self.size_x = 0;
             self.size_y += ENTRY_SIZE;
@@ -86,17 +86,20 @@ impl ShadowMapAtlas {
                 self.capacity_x - self.size_x,
                 self.capacity_y - self.size_y
             );
-        }
+        };
 
-        ShadowMapAtlasEntry {
+        let entry = ShadowMapAtlasEntry {
             position: Vec2 {
                 x: self.size_x as f32,
                 y: self.size_y as f32,
             },
-        }
+        };
+        self.size_x += ENTRY_SIZE;
+        entry
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct ShadowMapAtlasEntry {
     position: Vec2,
 }

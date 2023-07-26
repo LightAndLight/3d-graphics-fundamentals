@@ -4,7 +4,10 @@ use it::{
     camera::Camera,
     color::Color,
     gpu_buffer::GpuBuffer,
-    light::{DirectionalLight, DirectionalLightGpu, PointLight},
+    light::{
+        DirectionalLight, DirectionalLightGpu, PointLight, PointLightGpu, PointLightShadowMapFace,
+        ShadowMapLightIds,
+    },
     load::load_model,
     luminance::{self, Luminance},
     material::{Material, MaterialId, Materials},
@@ -576,38 +579,94 @@ fn main() {
         10,
     );
 
-    let mut point_lights_buffer: GpuBuffer<PointLight> = GpuBuffer::new(
+    let mut point_lights_buffer: GpuBuffer<PointLightGpu> = GpuBuffer::new(
         &device,
         Some("point_lights"),
         wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         10,
     );
-    let point_light_id = objects.insert(
-        &queue,
-        ObjectData {
-            transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                x: 2.0,
-                y: -2.0,
-                z: -10.0,
-            })
-            .into(),
-        },
-    );
-    point_lights_buffer.insert(
-        &queue,
-        PointLight {
-            object_id: point_light_id,
-            _padding0: [0, 0, 0],
-            color: Color {
-                r: 0.0,
-                g: 0.6,
-                b: 1.0,
-                a: 1.0,
+    let mut point_lights: Vec<PointLight> = Vec::new();
+    {
+        let position = Point3 {
+            x: 2.0,
+            y: -2.0,
+            z: -10.0,
+        };
+        let point_light_id = objects.insert(
+            &queue,
+            ObjectData {
+                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                    x: position.x,
+                    y: position.y,
+                    z: position.z,
+                })
+                .into(),
             },
-            luminous_power: 6e5,
-            _padding1: [0, 0, 0],
-        },
-    );
+        );
+
+        let shadow_projection = Matrix4::perspective(90.0, 1.0, 0.5, 15.0);
+
+        let mut create_shadow_map_face = |up, face_direction| -> PointLightShadowMapFace {
+            let shadow_map_atlas_entry = shadow_map_atlas.allocate();
+            let shadow_map_light_gpu_id = shadow_map_lights_buffer.insert(
+                &queue,
+                shadow_maps::Light {
+                    shadow_view: Matrix4::look_to(position, face_direction, up),
+                    shadow_projection,
+                    shadow_map_atlas_position: shadow_map_atlas_entry.position().into(),
+                    shadow_map_atlas_size: [
+                        shadow_map_atlas_entry.size(),
+                        shadow_map_atlas_entry.size(),
+                    ],
+                    _padding: [0, 0, 0, 0, 0, 0, 0],
+                },
+            );
+            PointLightShadowMapFace {
+                shadow_map_light_gpu_id,
+                shadow_map_atlas_entry,
+            }
+        };
+
+        let x = create_shadow_map_face(Vec3::Y, Vec3::X);
+        let neg_x = create_shadow_map_face(Vec3::Y, -Vec3::X);
+        let y = create_shadow_map_face(Vec3::Z, Vec3::Y);
+        let neg_y = create_shadow_map_face(Vec3::Z, -Vec3::Y);
+        let z = create_shadow_map_face(Vec3::Y, Vec3::Z);
+        let neg_z = create_shadow_map_face(Vec3::Y, -Vec3::Z);
+        point_lights.push(PointLight {
+            shadow_map_faces: it::light::PointLightShadowMapFaces {
+                x,
+                neg_x,
+                y,
+                neg_y,
+                z,
+                neg_z,
+            },
+        });
+
+        point_lights_buffer.insert(
+            &queue,
+            PointLightGpu {
+                object_id: point_light_id,
+                _padding0: [0, 0, 0],
+                color: Color {
+                    r: 0.0,
+                    g: 0.6,
+                    b: 1.0,
+                    a: 1.0,
+                },
+                luminous_power: 6e5,
+                shadow_map_light_ids: ShadowMapLightIds {
+                    x: x.shadow_map_light_gpu_id,
+                    neg_x: neg_x.shadow_map_light_gpu_id,
+                    y: y.shadow_map_light_gpu_id,
+                    neg_y: neg_y.shadow_map_light_gpu_id,
+                    z: z.shadow_map_light_gpu_id,
+                    neg_z: neg_z.shadow_map_light_gpu_id,
+                },
+            },
+        );
+    }
 
     let mut directional_lights_buffer: GpuBuffer<DirectionalLightGpu> = GpuBuffer::new(
         &device,
@@ -632,6 +691,7 @@ fn main() {
                 shadow_projection: Matrix4::ortho(-15.0, -5.0, -5.0, 5.0, -5.0, 5.0),
                 shadow_map_atlas_position: position.into(),
                 shadow_map_atlas_size: [size, size],
+                _padding: [0, 0, 0, 0, 0, 0, 0],
             },
         );
         directional_lights_buffer.insert(
@@ -951,6 +1011,7 @@ fn main() {
                     shadow_maps.record(
                         &mut command_encoder,
                         shadow_map_atlas.texture_view(),
+                        &point_lights,
                         &directional_lights,
                         &vertex_buffer,
                     );

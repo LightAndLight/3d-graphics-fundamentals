@@ -22,7 +22,7 @@
   * [x] Automatic exposure using average scene luminance
 * Shadow mapping
   * [x] Basic shadow map for directional lights
-  * [ ] Omnidirectional shadow mapping (point lights)
+  * [x] Omnidirectional shadow mapping (point lights)
   * [ ] Light frustum fitting
 * [ ] Anti-aliasing
 * Use GPU-driven techniques as much as possible
@@ -89,6 +89,10 @@
     * <http://duikerresearch.com/2015/09/filmic-tonemapping-for-real-time-rendering/>
 * Shadow mapping
   * <https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping>
+  * <https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-12-omnidirectional-shadow-mapping>
+    * Cube map face selection
+      * <https://stackoverflow.com/questions/6980530/selecting-the-face-of-a-cubemap-in-glsl>
+      * <https://www.gamedev.net/forums/topic/687535-implementing-a-cube-map-lookup-function/5337472/>
 * Depth buffer precision / logarithmic depth buffers
   * <https://outerra.blogspot.com/2009/08/logarithmic-z-buffer.html>
   * <https://www.gamedev.net/blog/73/entry-2006307-tip-of-the-day-logarithmic-zbuffer-artifacts-fix/>

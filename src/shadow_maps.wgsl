@@ -2,7 +2,8 @@ struct Light{
   shadow_view: mat4x4<f32>,
   shadow_projection: mat4x4<f32>,
   shadow_map_atlas_position: vec2<f32>,
-  shadow_map_atlas_size: vec2<f32>
+  shadow_map_atlas_size: vec2<f32>,
+  _padding: array<vec4<u32>, 7>
 }
 
 @group(0) @binding(0)

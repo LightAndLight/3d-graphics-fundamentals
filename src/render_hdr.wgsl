@@ -31,10 +31,20 @@ var<storage, read> objects: array<ObjectData>;
 @group(0) @binding(2)
 var<uniform> display_normals: u32; // Apparently booleans aren't host-mappable?
 
+struct PointLightShadowMapLightIds{
+  x: u32,
+  neg_x: u32,
+  y: u32,
+  neg_y: u32,
+  z: u32,
+  neg_z: u32
+}
+
 struct PointLight{
   object_id: u32,
   color: vec4<f32>,
-  luminous_power: f32
+  luminous_power: f32,
+  shadow_map_light_ids: PointLightShadowMapLightIds
 }
 
 @group(0) @binding(3)
@@ -70,7 +80,8 @@ struct ShadowMapLight{
   shadow_view: mat4x4<f32>,
   shadow_projection: mat4x4<f32>,
   shadow_map_atlas_position: vec2<f32>,
-  shadow_map_atlas_size: vec2<f32>
+  shadow_map_atlas_size: vec2<f32>,
+  _padding: array<vec4<u32>, 7>
 } 
 
 @group(0) @binding(8)
@@ -219,6 +230,37 @@ fn brdf(
   return diffuse + specular;
 }
 
+fn shadow_map_atlas_sample_coords(shadow_map_light: ShadowMapLight, fragment_light_space: vec4<f32>) -> vec2<f32> {
+  let shadow_map_atlas_dimensions = vec2<f32>(textureDimensions(shadow_map_atlas));
+
+  let shadow_map_entry_start_uv =
+    shadow_map_light.shadow_map_atlas_position / shadow_map_atlas_dimensions;
+
+  let shadow_map_entry_size_uv =
+    shadow_map_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
+
+  let shadow_map_offset_uv =
+    shadow_map_entry_size_uv * (fragment_light_space.xy * vec2<f32>(1.0, -1.0) + vec2<f32>(1.0))
+    /
+    vec2<f32>(2.0);
+
+  return shadow_map_entry_start_uv + shadow_map_offset_uv;
+}
+
+fn shadow_map_atlas_sample_coords2(shadow_map_light: ShadowMapLight, cubemap_uv: vec2<f32>) -> vec2<f32> {
+  let shadow_map_atlas_dimensions = vec2<f32>(textureDimensions(shadow_map_atlas));
+
+  let shadow_map_entry_start_uv =
+    shadow_map_light.shadow_map_atlas_position / shadow_map_atlas_dimensions;
+
+  let shadow_map_entry_size_uv =
+    shadow_map_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
+
+  let shadow_map_offset_uv = shadow_map_entry_size_uv * cubemap_uv;
+
+  return shadow_map_entry_start_uv + shadow_map_offset_uv;
+}
+
 struct FragmentOutput{
   @location(0) color: vec4<f32>,
   @builtin(frag_depth) depth: f32
@@ -243,19 +285,82 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
     let metallic = input.metallic;
     
     var luminance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
-      
+
     for (var i: u32 = 0u; i < arrayLength(&point_lights); i++) {
       let point_light = point_lights[i];
 
       // TODO: don't recalculate this for every fragment.
       let point_light_position: vec4<f32> = objects[point_light.object_id].transform * vec4<f32>(0.0, 0.0, 0.0, 1.0);
 
+      // fragment to light
       let light_direction: vec3<f32> = normalize((point_light_position.xyz / point_light_position.w) - input.world_position); 
       let distance_to_light = length(light_direction);
 
       let light_color = srgb_to_linear(point_light.color);
 
+      // TODO: handle cases where the light vector intersects an edge or a corner of the cube map.
+      let cubemap_coords = -light_direction;
+      let abs_cubemap_coords = abs(cubemap_coords);
+      var shadow_map_light_id: u32;
+      var cube_face: vec3<f32>;
+      var cubemap_uv: vec2<f32>;
+      if abs_cubemap_coords.x > abs_cubemap_coords.y && abs_cubemap_coords.x > abs_cubemap_coords.z {
+        if cubemap_coords.x >= 0.0 {
+          cube_face = vec3<f32>(1.0, 0.0, 0.0); // red = +X
+          
+          shadow_map_light_id = point_light.shadow_map_light_ids.x;
+          cubemap_uv = vec2<f32>(cubemap_coords.z, cubemap_coords.y) / vec2<f32>(abs_cubemap_coords.x);
+        } else {
+          cube_face = vec3<f32>(1.0, 1.0, 0.0); // yellow = -X
+          
+          shadow_map_light_id = point_light.shadow_map_light_ids.neg_x;
+          cubemap_uv = vec2<f32>(-cubemap_coords.z, cubemap_coords.y) / vec2<f32>(abs_cubemap_coords.x);
+        }
+      } else if abs_cubemap_coords.y > abs_cubemap_coords.x && abs_cubemap_coords.y > abs_cubemap_coords.z {
+        if cubemap_coords.y >= 0.0 {
+          cube_face = vec3<f32>(0.0, 1.0, 0.0); // green = +Y
+          
+          shadow_map_light_id = point_light.shadow_map_light_ids.y;
+          cubemap_uv = vec2<f32>(cubemap_coords.x, cubemap_coords.z) / vec2<f32>(abs_cubemap_coords.y);
+        } else {
+          cube_face = vec3<f32>(0.0, 1.0, 1.0); // cyan = -Y
+          
+          shadow_map_light_id = point_light.shadow_map_light_ids.neg_y;
+          cubemap_uv = vec2<f32>(-cubemap_coords.x, cubemap_coords.z) / vec2<f32>(abs_cubemap_coords.y);
+        }
+      } else if abs_cubemap_coords.z > abs_cubemap_coords.x && abs_cubemap_coords.z > abs_cubemap_coords.y {
+        if cubemap_coords.z >= 0.0 {
+          cube_face = vec3<f32>(0.0, 0.0, 1.0); // blue = +Z
+          
+          shadow_map_light_id = point_light.shadow_map_light_ids.z;
+          cubemap_uv = vec2<f32>(-cubemap_coords.x, cubemap_coords.y) / vec2<f32>(abs_cubemap_coords.z);
+        } else {
+          cube_face = vec3<f32>(1.0, 0.0, 1.0); // magenta = -Z
+          
+          shadow_map_light_id = point_light.shadow_map_light_ids.neg_z;
+          cubemap_uv = vec2<f32>(cubemap_coords.x, cubemap_coords.y) / vec2<f32>(abs_cubemap_coords.z);
+        }
+      }
+      // (-1, 1) -> (0, 0)
+      // (1, -1) -> (1, 1)
+      cubemap_uv *= vec2<f32>(0.5, -0.5);
+      cubemap_uv += 0.5;
+      
+      let shadow_map_light = shadow_map_lights[shadow_map_light_id];
+      let fragment_light_space = 
+        shadow_map_light.shadow_projection *
+        shadow_map_light.shadow_view *
+        vec4<f32>(input.world_position, 1.0);
+      let fragment_depth = fragment_light_space.z / fragment_light_space.w;
+
       luminance +=
+        // cube_face *
+        textureSampleCompare(
+          shadow_map_atlas,
+          shadow_map_atlas_sampler,
+          shadow_map_atlas_sample_coords2(shadow_map_light, cubemap_uv),
+          fragment_depth
+        ) *
         PI *
         brdf(
           surface_normal,
@@ -274,40 +379,23 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
     
     for (var i: u32 = 0u; i < arrayLength(&directional_lights); i++) {
       let directional_light = directional_lights[i];
-      let shadow_map_light = shadow_map_lights[directional_light.shadow_map_light_id];
 
       let light_direction: vec3<f32> = -directional_light.direction; 
       
       let light_color = srgb_to_linear(directional_light.color);
 
+      let shadow_map_light = shadow_map_lights[directional_light.shadow_map_light_id];
       let fragment_light_space = 
         shadow_map_light.shadow_projection *
         shadow_map_light.shadow_view *
         vec4<f32>(input.world_position, 1.0);
       let fragment_depth = fragment_light_space.z / fragment_light_space.w;
 
-      let shadow_map_atlas_dimensions = vec2<f32>(textureDimensions(shadow_map_atlas));
-      
-      let shadow_map_entry_start_uv =
-        shadow_map_light.shadow_map_atlas_position / shadow_map_atlas_dimensions;
-      
-      let shadow_map_entry_size_uv =
-        shadow_map_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
-
-      let shadow_map_offset_uv =
-        shadow_map_entry_size_uv * (fragment_light_space.xy * vec2<f32>(1.0, -1.0) + vec2<f32>(1.0))
-        /
-        vec2<f32>(2.0);
-
-      let shadow_map_sample_coords =
-        shadow_map_entry_start_uv + shadow_map_offset_uv;
-      
-
       luminance +=
         textureSampleCompare(
           shadow_map_atlas,
           shadow_map_atlas_sampler,
-          shadow_map_sample_coords,
+          shadow_map_atlas_sample_coords(shadow_map_light, fragment_light_space),
           fragment_depth
         ) *
         PI *

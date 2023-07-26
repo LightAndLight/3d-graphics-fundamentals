@@ -13,10 +13,22 @@ impl Vec3 {
         z: 0.0,
     };
 
+    pub const X: Self = Vec3 {
+        x: 1.0,
+        y: 0.0,
+        z: 0.0,
+    };
+
     pub const Y: Self = Vec3 {
         x: 0.0,
         y: 1.0,
         z: 0.0,
+    };
+
+    pub const Z: Self = Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 1.0,
     };
 
     pub fn cross(self, rhs: Self) -> Self {

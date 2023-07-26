@@ -1,8 +1,15 @@
+use std::num::NonZeroU64;
+
 use wgpu::include_wgsl;
 
 use crate::{
-    gpu_buffer::GpuBuffer, light::DirectionalLight, matrix::Matrix4, objects::Objects,
-    vertex::Vertex, vertex_buffer::VertexBuffer,
+    gpu_buffer::GpuBuffer,
+    light::{DirectionalLight, PointLight},
+    matrix::Matrix4,
+    objects::Objects,
+    shadow_map_atlas::ShadowMapAtlasEntry,
+    vertex::Vertex,
+    vertex_buffer::VertexBuffer,
 };
 
 #[repr(C)]
@@ -12,6 +19,9 @@ pub struct Light {
     pub shadow_projection: Matrix4,
     pub shadow_map_atlas_position: [f32; 2],
     pub shadow_map_atlas_size: [f32; 2],
+    /// [`Light`] is used in a dynamic uniform buffer, so it needs to meet the minimum uniform
+    /// buffer offset alignment of 256.
+    pub _padding: [u128; 7],
 }
 
 pub struct ShadowMaps {
@@ -55,6 +65,7 @@ impl ShadowMaps {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
+                // Front culling means I need less depth bias.
                 cull_mode: Some(wgpu::Face::Front),
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
@@ -84,7 +95,7 @@ impl ShadowMaps {
         &self,
         command_encoder: &mut wgpu::CommandEncoder,
         shadow_map_atlas: &wgpu::TextureView,
-        // point_light_entries: &GpuBuffer<ShadowMapAtlasEntry>,
+        point_lights: &[PointLight],
         directional_lights: &[DirectionalLight],
         vertex_buffer: &VertexBuffer,
     ) {
@@ -104,16 +115,82 @@ impl ShadowMaps {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(0, vertex_buffer.as_raw_slice());
 
-        for directional_light in directional_lights.iter() {
-            let position = directional_light.shadow_map_atlas_entry.position();
-            let size = directional_light.shadow_map_atlas_entry.size();
+        fn draw_shadow_map<'a>(
+            bind_group_0: &'a wgpu::BindGroup,
+            vertex_buffer: &VertexBuffer,
+            render_pass: &mut wgpu::RenderPass<'a>,
+            shadow_map_atlas_entry: &ShadowMapAtlasEntry,
+            shadow_map_light_gpu_id: u32,
+        ) {
+            let position = shadow_map_atlas_entry.position();
+            let size = shadow_map_atlas_entry.size();
             render_pass.set_viewport(position.x, position.y, size, size, 0.0, 1.0);
             render_pass.set_bind_group(
                 0,
-                &self.bind_group_0,
-                &[directional_light.shadow_map_light_gpu_id],
+                bind_group_0,
+                &[shadow_map_light_gpu_id * std::mem::size_of::<Light>() as u32],
             );
             render_pass.draw(0..vertex_buffer.len() as u32, 0..1);
+        }
+
+        for point_light in point_lights.iter() {
+            draw_shadow_map(
+                &self.bind_group_0,
+                vertex_buffer,
+                &mut render_pass,
+                &point_light.shadow_map_faces.x.shadow_map_atlas_entry,
+                point_light.shadow_map_faces.x.shadow_map_light_gpu_id,
+            );
+
+            draw_shadow_map(
+                &self.bind_group_0,
+                vertex_buffer,
+                &mut render_pass,
+                &point_light.shadow_map_faces.neg_x.shadow_map_atlas_entry,
+                point_light.shadow_map_faces.neg_x.shadow_map_light_gpu_id,
+            );
+
+            draw_shadow_map(
+                &self.bind_group_0,
+                vertex_buffer,
+                &mut render_pass,
+                &point_light.shadow_map_faces.y.shadow_map_atlas_entry,
+                point_light.shadow_map_faces.y.shadow_map_light_gpu_id,
+            );
+
+            draw_shadow_map(
+                &self.bind_group_0,
+                vertex_buffer,
+                &mut render_pass,
+                &point_light.shadow_map_faces.neg_y.shadow_map_atlas_entry,
+                point_light.shadow_map_faces.neg_y.shadow_map_light_gpu_id,
+            );
+
+            draw_shadow_map(
+                &self.bind_group_0,
+                vertex_buffer,
+                &mut render_pass,
+                &point_light.shadow_map_faces.z.shadow_map_atlas_entry,
+                point_light.shadow_map_faces.z.shadow_map_light_gpu_id,
+            );
+
+            draw_shadow_map(
+                &self.bind_group_0,
+                vertex_buffer,
+                &mut render_pass,
+                &point_light.shadow_map_faces.neg_z.shadow_map_atlas_entry,
+                point_light.shadow_map_faces.neg_z.shadow_map_light_gpu_id,
+            );
+        }
+
+        for directional_light in directional_lights.iter() {
+            draw_shadow_map(
+                &self.bind_group_0,
+                vertex_buffer,
+                &mut render_pass,
+                &directional_light.shadow_map_atlas_entry,
+                directional_light.shadow_map_light_gpu_id,
+            );
         }
     }
 }
@@ -126,7 +203,7 @@ pub struct BindGroup0<'a> {
 impl<'a> BindGroup0<'a> {
     pub fn create(&self, device: &wgpu::Device) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
         // @group(0) @binding(0)
-        // var<uniform> directional_light: DirectionalLight;
+        // var<uniform> light: Light;
         let directional_light = (
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -143,7 +220,7 @@ impl<'a> BindGroup0<'a> {
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: self.lights.as_raw_buffer(),
                     offset: 0,
-                    size: None,
+                    size: Some(NonZeroU64::try_from(std::mem::size_of::<Light>() as u64).unwrap()),
                 }),
             },
         );

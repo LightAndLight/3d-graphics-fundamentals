@@ -1,6 +1,6 @@
 use crate::{
     gpu_buffer::GpuBuffer,
-    light::{DirectionalLightGpu, PointLight},
+    light::{DirectionalLightGpu, PointLightGpu},
     material::Materials,
     objects::Objects,
     shadow_maps,
@@ -155,7 +155,7 @@ pub struct BindGroup0<'a> {
     pub camera: &'a wgpu::Buffer,
     pub objects: &'a Objects,
     pub display_normals: &'a wgpu::Buffer,
-    pub point_lights: &'a GpuBuffer<PointLight>,
+    pub point_lights: &'a GpuBuffer<PointLightGpu>,
     pub directional_lights: &'a GpuBuffer<DirectionalLightGpu>,
     pub materials: &'a Materials,
     pub shadow_map_atlas: &'a wgpu::TextureView,

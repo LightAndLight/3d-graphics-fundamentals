@@ -230,7 +230,7 @@ fn brdf(
   return diffuse + specular;
 }
 
-fn shadow_map_atlas_sample_coords(shadow_map_light: ShadowMapLight, fragment_light_space: vec4<f32>) -> vec2<f32> {
+fn shadow_map_atlas_sample_coords(shadow_map_light: ShadowMapLight, entry_uv: vec2<f32>) -> vec2<f32> {
   let shadow_map_atlas_dimensions = vec2<f32>(textureDimensions(shadow_map_atlas));
 
   let shadow_map_entry_start_uv =
@@ -239,26 +239,7 @@ fn shadow_map_atlas_sample_coords(shadow_map_light: ShadowMapLight, fragment_lig
   let shadow_map_entry_size_uv =
     shadow_map_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
 
-  let shadow_map_offset_uv =
-    shadow_map_entry_size_uv * (fragment_light_space.xy * vec2<f32>(1.0, -1.0) + vec2<f32>(1.0))
-    /
-    vec2<f32>(2.0);
-
-  return shadow_map_entry_start_uv + shadow_map_offset_uv;
-}
-
-fn shadow_map_atlas_sample_coords2(shadow_map_light: ShadowMapLight, cubemap_uv: vec2<f32>) -> vec2<f32> {
-  let shadow_map_atlas_dimensions = vec2<f32>(textureDimensions(shadow_map_atlas));
-
-  let shadow_map_entry_start_uv =
-    shadow_map_light.shadow_map_atlas_position / shadow_map_atlas_dimensions;
-
-  let shadow_map_entry_size_uv =
-    shadow_map_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
-
-  let shadow_map_offset_uv = shadow_map_entry_size_uv * cubemap_uv;
-
-  return shadow_map_entry_start_uv + shadow_map_offset_uv;
+  return shadow_map_entry_start_uv + clamp(entry_uv, vec2<f32>(0.0), vec2<f32>(1.0)) * shadow_map_entry_size_uv;
 }
 
 struct FragmentOutput{
@@ -358,7 +339,7 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
         textureSampleCompare(
           shadow_map_atlas,
           shadow_map_atlas_sampler,
-          shadow_map_atlas_sample_coords2(shadow_map_light, cubemap_uv),
+          shadow_map_atlas_sample_coords(shadow_map_light, cubemap_uv),
           fragment_depth
         ) *
         PI *
@@ -395,7 +376,7 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
         textureSampleCompare(
           shadow_map_atlas,
           shadow_map_atlas_sampler,
-          shadow_map_atlas_sample_coords(shadow_map_light, fragment_light_space),
+          shadow_map_atlas_sample_coords(shadow_map_light, fragment_light_space.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5)),
           fragment_depth
         ) *
         PI *

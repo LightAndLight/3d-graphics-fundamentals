@@ -35,6 +35,7 @@
 * [ ] Bloom
 * [ ] Area lights
 * [ ] Histogram-based auto-exposure
+* [ ] Parallax occlusion mapping
 * [ ] Virtual/adaptive shadow maps
 
 ## For fun

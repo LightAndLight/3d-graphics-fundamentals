@@ -15,7 +15,8 @@ fn get_object(objects: array<ObjectData>, object_id: ObjectId) -> ObjectData {
 struct Camera{
   eye: vec3<f32>,
   zfar: f32,
-  view_proj: mat4x4<f32>
+  view_proj: mat4x4<f32>,
+  view_proj_inv: mat4x4<f32>
 }
 
 @group(0) @binding(0)
@@ -86,6 +87,12 @@ struct ShadowMapLight{
 
 @group(0) @binding(8)
 var<storage, read> shadow_map_lights: array<ShadowMapLight>;
+
+@group(0) @binding(9)
+var sky_texture: texture_2d<f32>;
+
+@group(0) @binding(10)
+var sky_texture_sampler: sampler;
 
 fn srgb_to_linear_scalar(srgb: f32) -> f32 {
   if srgb <= 0.04045 {

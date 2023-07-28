@@ -125,12 +125,7 @@ impl RenderHdr {
                 view: hdr_render_target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 10_000.0 * (97.0_f64 / 255.0).powf(2.2),
-                        g: 10_000.0 * (180.0_f64 / 255.0).powf(2.2),
-                        b: 10_000.0 * (237.0_f64 / 255.0).powf(2.2),
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Load,
                     store: true,
                 },
             })],
@@ -161,6 +156,8 @@ pub struct BindGroup0<'a> {
     pub shadow_map_atlas: &'a wgpu::TextureView,
     pub shadow_map_atlas_sampler: &'a wgpu::Sampler,
     pub shadow_map_lights: &'a GpuBuffer<shadow_maps::Light>,
+    pub sky_texture: &'a wgpu::TextureView,
+    pub sky_texture_sampler: &'a wgpu::Sampler,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -360,6 +357,40 @@ impl<'a> BindGroup0<'a> {
             },
         );
 
+        // @group(0) @binding(9)
+        // var sky_texture: texture_2d<f32>;
+        let sky_texture = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 9,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 9,
+                resource: wgpu::BindingResource::TextureView(self.sky_texture),
+            },
+        );
+
+        // @group(0) @binding(10)
+        // var sky_texture_sampler: sampler;
+        let sky_texture_sampler = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 10,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 10,
+                resource: wgpu::BindingResource::Sampler(self.sky_texture_sampler),
+            },
+        );
+
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("render_hdr_bind_group_layout_0"),
             entries: &[
@@ -372,6 +403,8 @@ impl<'a> BindGroup0<'a> {
                 shadow_map_atlas.0,
                 shadow_map_atlas_sampler.0,
                 shadow_map_lights.0,
+                sky_texture.0,
+                sky_texture_sampler.0,
             ],
         });
 
@@ -388,6 +421,8 @@ impl<'a> BindGroup0<'a> {
                 shadow_map_atlas.1,
                 shadow_map_atlas_sampler.1,
                 shadow_map_lights.1,
+                sky_texture.1,
+                sky_texture_sampler.1,
             ],
         });
 

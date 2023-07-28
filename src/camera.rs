@@ -4,8 +4,8 @@ pub struct Camera {
     /// The camera's position.
     pub eye: cgmath::Point3<f32>,
 
-    /// The point at which the camera is looking.
-    pub target: cgmath::Point3<f32>,
+    /// The direction in which the camera is looking.
+    pub direction: cgmath::Vector3<f32>,
 
     /// The "up" direction relative to the camera.
     pub up: cgmath::Vector3<f32>,
@@ -31,16 +31,18 @@ impl Camera {
     [clip space coordinates](https://www.w3.org/TR/webgpu/#clip-space-coordinates).
      */
     pub fn clip_coordinates_matrix(&self) -> Matrix4 {
-        let view = Matrix4::look_at(self.eye.into(), self.target.into(), self.up.into());
+        let view = Matrix4::look_to(self.eye.into(), self.direction.into(), self.up.into());
         let perspective = Matrix4::perspective(self.fovy, self.aspect, self.near, self.far);
         perspective * view
     }
 
     pub fn to_uniform(&self) -> CameraUniform {
+        let view_proj = self.clip_coordinates_matrix();
         CameraUniform {
             eye: self.eye.into(),
             zfar: self.far,
-            view_proj: self.clip_coordinates_matrix(),
+            view_proj,
+            view_proj_inv: view_proj.inverse(),
         }
     }
 }
@@ -49,12 +51,7 @@ impl Camera {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct CameraUniform {
     pub eye: Point3,
-    /**
-    See:
-
-    * <https://sotrh.github.io/learn-wgpu/showcase/alignment/>
-    * <https://sotrh.github.io/learn-wgpu/intermediate/tutorial10-lighting/#the-blinn-phong-model>
-    */
     pub zfar: f32,
     pub view_proj: Matrix4,
+    pub view_proj_inv: Matrix4,
 }

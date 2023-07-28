@@ -1,5 +1,11 @@
-use std::time::{Duration, Instant};
+use std::{
+    fs::File,
+    io::BufReader,
+    time::{Duration, Instant},
+};
 
+use cgmath::Rotation3;
+use image::codecs::hdr::HdrDecoder;
 use it::{
     camera::Camera,
     color::Color,
@@ -15,6 +21,7 @@ use it::{
     objects::{ObjectData, ObjectId, Objects},
     point::Point3,
     render_hdr::{self, RenderHdr},
+    render_sky::{self, RenderSky},
     shadow_map_atlas::ShadowMapAtlas,
     shadow_maps::{self, ShadowMaps},
     tone_mapping::{self, ToneMapping},
@@ -298,6 +305,8 @@ fn main() {
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
 
+    window.set_cursor_visible(false);
+
     let mut fps = Fps::new();
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
@@ -497,6 +506,75 @@ fn main() {
         matte_red_material,
     );
 
+    let hdri = HdrDecoder::new(BufReader::new(
+        File::open("hdris/rustig_koppie_puresky_4k.hdr").unwrap(),
+    ))
+    .unwrap();
+
+    let hdri_metadata = hdri.metadata();
+    let hdri_data = hdri.read_image_hdr().unwrap();
+
+    log::debug!("hdri exposure: {:?}", hdri_metadata.exposure);
+
+    let hdri_texture_size = wgpu::Extent3d {
+        width: hdri_metadata.width,
+        height: hdri_metadata.height,
+        depth_or_array_layers: 1,
+    };
+    let sky_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("sky_texture"),
+        size: hdri_texture_size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba32Float,
+        usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
+    });
+    let hdr_intensity = 80000.0;
+    queue.write_texture(
+        wgpu::ImageCopyTextureBase {
+            texture: &sky_texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
+            aspect: wgpu::TextureAspect::All,
+        },
+        bytemuck::cast_slice(
+            &hdri_data
+                .into_iter()
+                .map(|pixel| {
+                    [
+                        hdr_intensity * pixel.0[0],
+                        hdr_intensity * pixel.0[1],
+                        hdr_intensity * pixel.0[2],
+                        1.0,
+                    ]
+                })
+                .collect::<Vec<[f32; 4]>>(),
+        ),
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * 4 * hdri_texture_size.width),
+            rows_per_image: Some(hdri_texture_size.height),
+        },
+        hdri_texture_size,
+    );
+    let sky_texture_view = sky_texture.create_view(&wgpu::TextureViewDescriptor::default());
+    let sky_texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("sky_texture_sampler"),
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        mag_filter: wgpu::FilterMode::Nearest,
+        min_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::FilterMode::Nearest,
+        lod_min_clamp: 0.0,
+        lod_max_clamp: 0.0,
+        compare: None,
+        anisotropy_clamp: 1,
+        border_color: None,
+    });
+
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
 
     let hdr_render_target_format = wgpu::TextureFormat::Rgba32Float;
@@ -538,10 +616,10 @@ fn main() {
             y: 0.0,
             z: 1.0,
         },
-        target: cgmath::Point3 {
+        direction: cgmath::Vector3 {
             x: 0.0,
             y: 0.0,
-            z: 0.0,
+            z: -1.0,
         },
         up: cgmath::Vector3 {
             x: 0.0,
@@ -756,6 +834,16 @@ fn main() {
         },
     );
 
+    let render_sky = RenderSky::new(
+        &device,
+        hdr_render_target_format,
+        render_sky::BindGroup0 {
+            camera: &camera_buffer,
+            sky_texture: &sky_texture_view,
+            sky_texture_sampler: &sky_texture_sampler,
+        },
+    );
+
     let render_hdr = RenderHdr::new(
         &device,
         hdr_render_target_format,
@@ -770,6 +858,8 @@ fn main() {
             shadow_map_atlas: shadow_map_atlas.texture_view(),
             shadow_map_atlas_sampler: shadow_map_atlas.sampler(),
             shadow_map_lights: &shadow_map_lights_buffer,
+            sky_texture: &sky_texture_view,
+            sky_texture_sampler: &sky_texture_sampler,
         },
     );
 
@@ -938,37 +1028,39 @@ fn main() {
             Event::MainEventsCleared => {
                 fps.start_frame();
                 window.request_redraw();
+                window
+                    .set_cursor_position(winit::dpi::PhysicalPosition {
+                        x: surface_config.width as f32 / 2.0,
+                        y: surface_config.height as f32 / 2.0,
+                    })
+                    .unwrap();
             }
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 if w_held {
-                    let camera_direction = camera.target - camera.eye;
-                    let camera_movement = camera_move_speed * camera_direction;
-                    camera.eye += camera_movement;
-                    camera.target += camera_movement;
+                    let camera_movement = camera_move_speed * camera.direction;
+                    camera.eye.x += camera_movement.x;
+                    camera.eye.z += camera_movement.z;
                     camera_updated = true;
                 }
 
                 if s_held {
-                    let camera_direction = camera.target - camera.eye;
-                    let camera_movement = camera_move_speed * camera_direction;
-                    camera.eye -= camera_movement;
-                    camera.target -= camera_movement;
+                    let camera_movement = camera_move_speed * camera.direction;
+                    camera.eye.x -= camera_movement.x;
+                    camera.eye.z -= camera_movement.z;
                     camera_updated = true;
                 }
 
                 if a_held {
-                    let camera_direction = camera.target - camera.eye;
-                    let camera_movement = camera_move_speed * camera.up.cross(camera_direction);
-                    camera.eye += camera_movement;
-                    camera.target += camera_movement;
+                    let camera_movement = camera_move_speed * camera.up.cross(camera.direction);
+                    camera.eye.x += camera_movement.x;
+                    camera.eye.z += camera_movement.z;
                     camera_updated = true;
                 }
 
                 if d_held {
-                    let camera_direction = camera.target - camera.eye;
-                    let camera_movement = camera_move_speed * camera.up.cross(camera_direction);
-                    camera.eye -= camera_movement;
-                    camera.target -= camera_movement;
+                    let camera_movement = camera_move_speed * camera.up.cross(camera.direction);
+                    camera.eye.x -= camera_movement.x;
+                    camera.eye.z -= camera_movement.z;
                     camera_updated = true;
                 }
 
@@ -1016,6 +1108,8 @@ fn main() {
                         &vertex_buffer,
                     );
 
+                    render_sky.record(&mut command_encoder, &hdr_render_target_view);
+
                     render_hdr.record(
                         &mut command_encoder,
                         &hdr_render_target_view,
@@ -1036,6 +1130,22 @@ fn main() {
                 surface_texture.present();
 
                 fps.end_frame();
+            }
+            Event::DeviceEvent {
+                event:
+                    winit::event::DeviceEvent::MouseMotion {
+                        delta: (delta_x, delta_y),
+                    },
+                ..
+            } => {
+                camera.direction = cgmath::Quaternion::from_axis_angle(
+                    camera.up,
+                    cgmath::Deg(-delta_x as f32 / 10.0),
+                ) * cgmath::Quaternion::from_axis_angle(
+                    camera.up.cross(camera.direction),
+                    cgmath::Deg(delta_y as f32 / 10.0),
+                ) * camera.direction;
+                camera_updated = true;
             }
             _ => {}
         }

@@ -1,3 +1,5 @@
+use cgmath::Transform;
+
 use crate::{point::Point3, vector::Vec3};
 
 #[repr(C)]
@@ -64,6 +66,14 @@ impl Matrix4 {
             dir.into(),
             up.into(),
         ))
+    }
+
+    pub fn inverse(&self) -> Self {
+        Self::from(
+            cgmath::Matrix4::from(self.value)
+                .inverse_transform()
+                .unwrap(),
+        )
     }
 }
 

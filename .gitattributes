@@ -1,0 +1,2 @@
+*.hdr filter=lfs diff=lfs merge=lfs -text
+/hdris/rustig_koppie_puresky_4k.hdr filter=lfs diff=lfs merge=lfs -text

@@ -27,10 +27,11 @@ impl<T: Sized + bytemuck::Pod> GpuBuffer<T> {
     }
 
     pub fn insert(&mut self, queue: &wgpu::Queue, data: T) -> u32 {
+        assert!(self.size < self.capacity);
+
         let next_free_index = self.size;
 
         let next_size = self.size + 1;
-        assert!(next_size < self.capacity);
         self.size = next_size;
 
         queue.write_buffer(

@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::vector::Vec2;
+use crate::{gpu_buffer::GpuBuffer, vector::Vec2};
 
 pub struct RenderSky {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
@@ -117,6 +117,7 @@ pub struct BindGroup0<'a> {
     pub camera: &'a wgpu::Buffer,
     pub sky_texture: &'a wgpu::TextureView,
     pub sky_texture_sampler: &'a wgpu::Sampler,
+    pub sky_intensity: &'a GpuBuffer<f32>,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -178,15 +179,48 @@ impl<'a> BindGroup0<'a> {
             },
         );
 
+        // @group(0) @binding(3)
+        // var sky_intensity: f32;
+        let sky_intensity = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: self.sky_intensity.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        );
+
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("render_sky_bind_group_layout_0"),
-            entries: &[camera.0, sky_texture.0, sky_texture_sampler.0],
+            entries: &[
+                camera.0,
+                sky_texture.0,
+                sky_texture_sampler.0,
+                sky_intensity.0,
+            ],
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("render_sky_bind_group_0"),
             layout: &layout,
-            entries: &[camera.1, sky_texture.1, sky_texture_sampler.1],
+            entries: &[
+                camera.1,
+                sky_texture.1,
+                sky_texture_sampler.1,
+                sky_intensity.1,
+            ],
         });
 
         (layout, bind_group)

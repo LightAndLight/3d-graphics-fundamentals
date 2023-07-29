@@ -531,7 +531,15 @@ fn main() {
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
     });
-    let hdr_intensity = 80000.0;
+
+    let mut sky_intensity_buffer = GpuBuffer::new(
+        &device,
+        Some("sky_intensity"),
+        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+        1,
+    );
+    sky_intensity_buffer.insert(&queue, 80_000.0);
+
     queue.write_texture(
         wgpu::ImageCopyTextureBase {
             texture: &sky_texture,
@@ -542,14 +550,7 @@ fn main() {
         bytemuck::cast_slice(
             &hdri_data
                 .into_iter()
-                .map(|pixel| {
-                    [
-                        hdr_intensity * pixel.0[0],
-                        hdr_intensity * pixel.0[1],
-                        hdr_intensity * pixel.0[2],
-                        1.0,
-                    ]
-                })
+                .map(|pixel| [pixel.0[0], pixel.0[1], pixel.0[2], 1.0])
                 .collect::<Vec<[f32; 4]>>(),
         ),
         wgpu::ImageDataLayout {
@@ -841,6 +842,7 @@ fn main() {
             camera: &camera_buffer,
             sky_texture: &sky_texture_view,
             sky_texture_sampler: &sky_texture_sampler,
+            sky_intensity: &sky_intensity_buffer,
         },
     );
 

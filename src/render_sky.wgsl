@@ -15,6 +15,9 @@ var sky_texture: texture_2d<f32>;
 @group(0) @binding(2)
 var sky_texture_sampler: sampler;
 
+@group(0) @binding(3)
+var<uniform> sky_intensity: f32;
+
 @vertex
 fn vertex_main(@location(0) position: vec2<f32>) -> VertexOutput {
   let view_direction = camera.view_proj_inv * vec4<f32>(position, 1.0, 1.0);
@@ -60,9 +63,11 @@ fn fragment_main(input: VertexOutput) -> @location(0) vec4<f32> {
   through the center of the fragment.
   */
 
-  return textureSample(
-    sky_texture,
-    sky_texture_sampler,
-    direction_to_uv_equirectangular(normalize(input.view_direction))
-  );
+  return 
+    vec4<f32>(vec3<f32>(sky_intensity), 1.0) *
+    textureSample(
+      sky_texture,
+      sky_texture_sampler,
+      direction_to_uv_equirectangular(normalize(input.view_direction))
+    );
 }

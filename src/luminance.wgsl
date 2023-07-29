@@ -109,6 +109,8 @@ fn saturating_luminance_EV100(ev: f32) -> f32 {
   return 1.2 * pow(2.0, ev);
 }
 
+const MAX_EV100: f32 = 18.0;
+
 @compute @workgroup_size(1)
 fn calculate_average_luminance() {
   let hdr_render_target_dimensions = textureDimensions(hdr_render_target);
@@ -121,6 +123,6 @@ fn calculate_average_luminance() {
   
   average_luminance = total_luminance / f32(hdr_texels);
   // auto_EV100 = 14.6; // "sunny 16" EV100
-  auto_EV100 = average_luminance_to_EV100(average_luminance);
+  auto_EV100 = min(average_luminance_to_EV100(average_luminance), MAX_EV100);
   saturating_luminance = saturating_luminance_EV100(auto_EV100);
 }

@@ -190,7 +190,9 @@ fn g1(alpha: f32, normal: vec3<f32>, v: vec3<f32>, h: vec3<f32>) -> f32 {
   let n_dot_v_2 = n_dot_v * n_dot_v;
   let alpha_squared = alpha * alpha;
   return 
-    is_positive(dot(v, h) / n_dot_v) * 2.0
+    // This term is in the original paper but it seems to make specular reflections disappear near grazing angles.  
+    /* is_positive(dot(v, h) / n_dot_v) * */
+    2.0
     /
     (1.0 + sqrt(1.0 + alpha_squared * (1.0 / n_dot_v_2 - 1.0)));
 }

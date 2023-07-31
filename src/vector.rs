@@ -1,3 +1,7 @@
+use cgmath::Point1;
+
+use crate::point::Point3;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vec3 {
@@ -107,5 +111,15 @@ pub struct Vec2 {
 impl From<Vec2> for [f32; 2] {
     fn from(value: Vec2) -> Self {
         [value.x, value.y]
+    }
+}
+
+impl From<Point3> for Vec3 {
+    fn from(value: Point3) -> Self {
+        Vec3 {
+            x: value.x,
+            y: value.y,
+            z: value.z,
+        }
     }
 }

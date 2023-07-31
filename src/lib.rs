@@ -12,6 +12,7 @@ pub mod render_hdr;
 pub mod render_sky;
 pub mod shadow_map_atlas;
 pub mod shadow_maps;
+pub mod shape;
 pub mod tone_mapping;
 pub mod vector;
 pub mod vertex;

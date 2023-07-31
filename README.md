@@ -26,13 +26,13 @@
   * [ ] Light frustum fitting
 * Environment mapping / image-based lighting
   * [x] HDRI skybox
-* [ ] Anti-aliasing
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
   * [ ] `draw_indirect`
 
 ## Stretch goals
 
+* [ ] Anti-aliasing
 * [ ] Ambient occlusion
 * [ ] Bloom
 * [ ] Area lights

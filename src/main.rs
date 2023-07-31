@@ -16,17 +16,17 @@ use it::{
     },
     load::load_model,
     luminance::{self, Luminance},
-    material::{Material, MaterialId, Materials},
+    material::{Material, Materials},
     matrix::Matrix4,
-    objects::{ObjectData, ObjectId, Objects},
+    objects::{ObjectData, Objects},
     point::Point3,
     render_hdr::{self, RenderHdr},
     render_sky::{self, RenderSky},
     shadow_map_atlas::ShadowMapAtlas,
     shadow_maps::{self, ShadowMaps},
+    shape,
     tone_mapping::{self, ToneMapping},
     vector::Vec3,
-    vertex::Vertex,
     vertex_buffer::VertexBuffer,
 };
 use wgpu::util::DeviceExt;
@@ -35,233 +35,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-
-fn triangle_camera_space(object_id: ObjectId, material_id: MaterialId) -> Vec<Vertex> {
-    vec![
-        Vertex {
-            position: Point3 {
-                x: 0.5,
-                y: -0.5,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: 0.0,
-                y: 0.5,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: -0.5,
-                y: -0.5,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-    ]
-}
-
-fn square_camera_space(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
-    let side_over_2 = side / 2.0;
-    vec![
-        Vertex {
-            position: Point3 {
-                x: side_over_2,
-                y: side_over_2,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: -side_over_2,
-                y: side_over_2,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: -side_over_2,
-                y: -side_over_2,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: side_over_2,
-                y: side_over_2,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: -side_over_2,
-                y: -side_over_2,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: side_over_2,
-                y: -side_over_2,
-                z: 0.0,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            material_id,
-        },
-    ]
-}
-
-fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
-    let side_over_2 = side / 2.0;
-    vec![
-        Vertex {
-            position: Point3 {
-                x: side_over_2,
-                y: 0.0,
-                z: -side_over_2,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: -side_over_2,
-                y: 0.0,
-                z: side_over_2,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: side_over_2,
-                y: 0.0,
-                z: side_over_2,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: side_over_2,
-                y: 0.0,
-                z: -side_over_2,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: -side_over_2,
-                y: 0.0,
-                z: -side_over_2,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
-            material_id,
-        },
-        Vertex {
-            position: Point3 {
-                x: -side_over_2,
-                y: 0.0,
-                z: side_over_2,
-            },
-            object_id,
-            normal: Vec3 {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
-            material_id,
-        },
-    ]
-}
 
 struct Fps {
     frame_times: Vec<Duration>,
@@ -369,7 +142,7 @@ fn main() {
     surface.configure(&device, &surface_config);
 
     let mut objects = Objects::new(&device, 1000);
-    let mut materials = Materials::new(&device, 10);
+    let mut materials = Materials::new(&device, 100);
 
     let matte_gold_material = materials.insert(
         &queue,
@@ -442,7 +215,7 @@ fn main() {
                 .into(),
             },
         );
-        vertex_buffer.insert_many(&queue, &triangle_camera_space(object_id, blue_material));
+        vertex_buffer.insert_many(&queue, &shape::triangle(object_id, blue_material));
     }
 
     {
@@ -457,10 +230,7 @@ fn main() {
                 .into(),
             },
         );
-        vertex_buffer.insert_many(
-            &queue,
-            &square_camera_space(object_id, green_material, 0.25),
-        );
+        vertex_buffer.insert_many(&queue, &shape::square(object_id, green_material, 0.25));
     }
 
     {
@@ -475,7 +245,36 @@ fn main() {
                 .into(),
             },
         );
-        vertex_buffer.insert_many(&queue, &floor(object_id, grey_material, 100.0));
+        vertex_buffer.insert_many(&queue, &shape::floor(object_id, grey_material, 100.0));
+    }
+
+    for i in 0..10 {
+        let matte_grey_material = materials.insert(
+            &queue,
+            Material {
+                color: Color {
+                    r: 0.7,
+                    g: 0.7,
+                    b: 0.7,
+                    a: 1.0,
+                },
+                roughness: 0.1 + (i as f32 / 10.0) * 0.7,
+                metallic: 1.0,
+                _padding: [0, 0],
+            },
+        );
+        let object_id = objects.insert(
+            &queue,
+            ObjectData {
+                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                    x: 1.0 + i as f32,
+                    y: -2.0,
+                    z: -4.0 - i as f32,
+                })
+                .into(),
+            },
+        );
+        vertex_buffer.insert_many(&queue, &shape::sphere(object_id, matte_grey_material, 0.5));
     }
 
     load_model(

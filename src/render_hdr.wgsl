@@ -94,6 +94,9 @@ var sky_texture: texture_2d<f32>;
 @group(0) @binding(10)
 var sky_texture_sampler: sampler;
 
+@group(0) @binding(11)
+var<uniform> sky_intensity: f32;
+
 fn srgb_to_linear_scalar(srgb: f32) -> f32 {
   if srgb <= 0.04045 {
     return srgb / 12.92;
@@ -167,6 +170,11 @@ fn schlick(f0: vec3<f32>, light_direction: vec3<f32>, normal: vec3<f32>) -> vec3
   return f0 + (1.0 - f0) * pow(1.0 - max(dot(normal, light_direction), 0.0), 5.0);
 }
 
+fn fresnel(light_direction: vec3<f32>, normal: vec3<f32>, albedo: vec3<f32>, metallic: f32) -> vec3<f32> {
+  let f0 = mix(vec3<f32>(0.04), albedo, metallic);
+  return schlick(f0, light_direction, normal);
+}
+
 fn is_positive(x: f32) -> f32 {
   if x <= 0.0 {
     return 0.0;
@@ -213,6 +221,24 @@ are optimised and written to avoid unnecessary divides-by-zero, so they take a s
     In Proceedings of the 18th Eurographics conference on Rendering Techniques (pp. 195-206).
 */
 
+fn specular_brdf_no_fresnel(
+  normal: vec3<f32>,
+  light_direction: vec3<f32>,
+  view_direction: vec3<f32>,
+  half_vector: vec3<f32>,
+  roughness: f32,
+) -> f32 {
+  let alpha = roughness * roughness;
+  
+  let g = geometry(alpha, normal, light_direction, view_direction, half_vector);
+  let d = distribution(alpha, normal, half_vector);
+  
+  return
+    g * d
+    / 
+    (4.0 * max(dot(normal, light_direction), 0.00001) * max(dot(normal, view_direction), 0.00001));
+}
+
 fn brdf(
   normal: vec3<f32>,
   albedo: vec3<f32>,
@@ -223,16 +249,9 @@ fn brdf(
 ) -> vec3<f32> {
   let half_vector = normalize(light_direction + view_direction);
   
-  let alpha = pow(roughness, 2.0);
-
-  let f0 = mix(vec3<f32>(0.04), albedo.rgb, metallic);
-  let f = schlick(f0, light_direction, half_vector);
-  let g = geometry(alpha, normal, light_direction, view_direction, half_vector);
-  let d = distribution(alpha, normal, half_vector);
-  let specular = 
-    f * g * d
-    / 
-    (4.0 * max(dot(normal, light_direction), 0.00001) * max(dot(normal, view_direction), 0.00001));
+  let f = fresnel(light_direction, half_vector, albedo.rgb, metallic);
+  
+  let specular = f * specular_brdf_no_fresnel(normal, light_direction, view_direction, half_vector, roughness);
 
   let diffuse = (1.0 - f) * (1.0 - metallic) * diffuse_brdf(albedo, light_direction, view_direction);
 
@@ -249,6 +268,15 @@ fn shadow_map_atlas_sample_coords(shadow_map_light: ShadowMapLight, entry_uv: ve
     shadow_map_light.shadow_map_atlas_size / shadow_map_atlas_dimensions;
 
   return shadow_map_entry_start_uv + clamp(entry_uv, vec2<f32>(0.0), vec2<f32>(1.0)) * shadow_map_entry_size_uv;
+}
+
+// Originally defined in `render_sky.wgsl:direction_to_uv_equirectangular`.
+const TAU: f32 = 6.2831;
+fn direction_to_uv_equirectangular(direction: vec3<f32>) -> vec2<f32> {
+  let azimuth = sign(direction.x) * acos(direction.z / length(direction.zx));
+  let polar_angle = acos(direction.y);
+  let spherical_coords = vec2<f32>(azimuth, polar_angle);
+  return (spherical_coords * vec2<f32>(-1.0, 1.0) + vec2<f32>(PI, 0.0)) / vec2<f32>(TAU, PI);
 }
 
 struct FragmentOutput{
@@ -274,7 +302,28 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
     let roughness = input.roughness;
     let metallic = input.metallic;
     
-    var luminance: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+    var luminance: vec3<f32> = vec3<f32>(0.0);
+    
+    let reflected_view_direction = 2.0 * dot(view_direction, surface_normal) * surface_normal - view_direction; 
+    let environment_light =
+      vec3<f32>(sky_intensity) *
+      textureSample(
+        sky_texture,
+        sky_texture_sampler,
+        direction_to_uv_equirectangular(reflected_view_direction)
+      ).xyz;
+    luminance +=
+      PI *
+      brdf(
+        surface_normal,
+        albedo.rgb,
+        roughness,
+        metallic,
+        reflected_view_direction,
+        view_direction
+      ) *
+      environment_light *
+      max(dot(surface_normal, reflected_view_direction), 0.0);
 
     for (var i: u32 = 0u; i < arrayLength(&point_lights); i++) {
       let point_light = point_lights[i];

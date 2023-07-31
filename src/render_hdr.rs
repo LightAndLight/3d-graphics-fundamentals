@@ -158,6 +158,7 @@ pub struct BindGroup0<'a> {
     pub shadow_map_lights: &'a GpuBuffer<shadow_maps::Light>,
     pub sky_texture: &'a wgpu::TextureView,
     pub sky_texture_sampler: &'a wgpu::Sampler,
+    pub sky_intensity: &'a GpuBuffer<f32>,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -382,12 +383,35 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupLayoutEntry {
                 binding: 10,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
             wgpu::BindGroupEntry {
                 binding: 10,
                 resource: wgpu::BindingResource::Sampler(self.sky_texture_sampler),
+            },
+        );
+
+        // @group(0) @binding(11)
+        // var<uniform> sky_intensity: f32;
+        let sky_intensity = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 11,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 11,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: self.sky_intensity.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
             },
         );
 
@@ -405,6 +429,7 @@ impl<'a> BindGroup0<'a> {
                 shadow_map_lights.0,
                 sky_texture.0,
                 sky_texture_sampler.0,
+                sky_intensity.0,
             ],
         });
 
@@ -423,6 +448,7 @@ impl<'a> BindGroup0<'a> {
                 shadow_map_lights.1,
                 sky_texture.1,
                 sky_texture_sampler.1,
+                sky_intensity.1,
             ],
         });
 

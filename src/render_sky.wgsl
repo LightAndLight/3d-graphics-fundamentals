@@ -38,6 +38,7 @@ const PI: f32 = 3.1415;
 
 // Given a direction vector, sample from a texture containing an equirectangular projection of a sphere.
 fn direction_to_uv_equirectangular(direction: vec3<f32>) -> vec2<f32> {
+  
   /* Based on this conversion: <https://en.wikipedia.org/wiki/Spherical_coordinate_system#Cartesian_coordinates>
 
   +Y axis is up, +Z is forward, and rotating toward +X gives a positive azimuth.

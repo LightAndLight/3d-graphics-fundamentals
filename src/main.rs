@@ -258,7 +258,7 @@ fn main() {
                     b: 0.7,
                     a: 1.0,
                 },
-                roughness: 0.1 + (i as f32 / 10.0) * 0.7,
+                roughness: 0.1 + (i as f32 / 10.0) * 0.9,
                 metallic: 1.0,
                 _padding: [0, 0],
             },
@@ -661,6 +661,7 @@ fn main() {
             shadow_map_lights: &shadow_map_lights_buffer,
             sky_texture: &sky_texture_view,
             sky_texture_sampler: &sky_texture_sampler,
+            sky_intensity: &sky_intensity_buffer,
         },
     );
 

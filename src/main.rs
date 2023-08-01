@@ -4,9 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use cgmath::{Rotation3, Vector4};
+use cgmath::Rotation3;
 use image::codecs::hdr::HdrDecoder;
 use it::{
+    aabb::Aabb,
     camera::{Camera, CameraUniform},
     color::Color,
     debug_light_frustum::{self, DebugLightFrustum},
@@ -146,6 +147,10 @@ fn main() {
     surface.configure(&device, &surface_config);
 
     let mut objects = Objects::new(&device, 1000);
+    let mut shadow_caster_scene_bounds: Aabb = Aabb {
+        min: Point3::ZERO,
+        max: Point3::ZERO,
+    };
     let mut materials = Materials::new(&device, 100);
 
     let matte_gold_material = materials.insert(
@@ -267,21 +272,33 @@ fn main() {
                 _padding: [0, 0],
             },
         );
-        let object_id = objects.insert(
-            &queue,
-            ObjectData {
-                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                    x: 1.0 + i as f32,
-                    y: -2.0,
-                    z: -4.0 - i as f32,
-                })
-                .into(),
+        let transform: Matrix4 = cgmath::Matrix4::from_translation(cgmath::Vector3 {
+            x: 1.0 + i as f32,
+            y: -2.0,
+            z: -4.0 - i as f32,
+        })
+        .into();
+        let object_id = objects.insert(&queue, ObjectData { transform });
+        let radius = 0.5;
+        let vertices = shape::sphere(object_id, matte_grey_material, radius);
+        vertex_buffer.insert_many(&queue, &vertices);
+        let model_aabb = Aabb {
+            min: Point3 {
+                x: -radius,
+                y: -radius,
+                z: -radius,
             },
-        );
-        vertex_buffer.insert_many(&queue, &shape::sphere(object_id, matte_grey_material, 0.5));
+            max: Point3 {
+                x: radius,
+                y: radius,
+                z: radius,
+            },
+        };
+
+        shadow_caster_scene_bounds = shadow_caster_scene_bounds.union(transform * model_aabb);
     }
 
-    load_model(
+    let teapot_aabb = load_model(
         &queue,
         &mut objects,
         &mut vertex_buffer,
@@ -294,8 +311,9 @@ fn main() {
         .into(),
         matte_gold_material,
     );
+    shadow_caster_scene_bounds = shadow_caster_scene_bounds.union(teapot_aabb);
 
-    load_model(
+    let monkey_aabb = load_model(
         &queue,
         &mut objects,
         &mut vertex_buffer,
@@ -308,6 +326,7 @@ fn main() {
         .into(),
         matte_red_material,
     );
+    shadow_caster_scene_bounds = shadow_caster_scene_bounds.union(monkey_aabb);
 
     let hdri = HdrDecoder::new(BufReader::new(
         File::open("hdris/rustig_koppie_puresky_4k.hdr").unwrap(),
@@ -552,16 +571,8 @@ fn main() {
         );
     }
 
-    struct Aabb {
-        left: f32,
-        right: f32,
-        bottom: f32,
-        top: f32,
-        near: f32,
-        far: f32,
-    }
-
     fn fit_orthographic_projection_to_camera(
+        scene_bounds: &Aabb,
         camera: &Camera,
         camera_proj_view_inverse: Matrix4,
         shadow_view: Matrix4,
@@ -687,24 +698,52 @@ fn main() {
             .map(|point| point.y)
             .max_by(compare)
             .unwrap();
-        let near = dbg!(camera_shadow_points
-            .iter()
-            .map(|point| point.z)
-            .min_by(compare)
-            .unwrap());
-        let far = dbg!(camera_shadow_points
-            .iter()
-            .map(|point| point.z)
-            .max_by(compare)
-            .unwrap());
+        let near = f32::max(
+            Point3::from(
+                shadow_view
+                    * Point4 {
+                        x: scene_bounds.min.x,
+                        y: scene_bounds.min.y,
+                        z: scene_bounds.min.z,
+                        w: 1.0,
+                    },
+            )
+            .z,
+            camera_shadow_points
+                .iter()
+                .map(|point| point.z)
+                .min_by(compare)
+                .unwrap(),
+        );
+        let far = f32::min(
+            Point3::from(
+                shadow_view
+                    * Point4 {
+                        x: scene_bounds.max.x,
+                        y: scene_bounds.max.y,
+                        z: scene_bounds.max.z,
+                        w: 1.0,
+                    },
+            )
+            .z,
+            camera_shadow_points
+                .iter()
+                .map(|point| point.z)
+                .max_by(compare)
+                .unwrap(),
+        );
 
         Aabb {
-            left,
-            right,
-            bottom,
-            top,
-            near,
-            far,
+            min: Point3 {
+                x: left,
+                y: bottom,
+                z: near,
+            },
+            max: Point3 {
+                x: right,
+                y: top,
+                z: far,
+            },
         }
     }
 
@@ -740,6 +779,7 @@ fn main() {
         let shadow_view = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y);
 
         let aabb = fit_orthographic_projection_to_camera(
+            &shadow_caster_scene_bounds,
             &camera,
             camera.clip_coordinates_matrix().inverse(),
             shadow_view,
@@ -749,45 +789,45 @@ fn main() {
             debug_light_frustum_shadow_view_inverse.insert(&queue, shadow_view.inverse());
 
             let near_bottom_left = Vec3 {
-                x: aabb.left,
-                y: aabb.bottom,
-                z: aabb.near,
+                x: aabb.min.x,
+                y: aabb.min.y,
+                z: aabb.min.z,
             };
             let near_bottom_right = Vec3 {
-                x: aabb.right,
-                y: aabb.bottom,
-                z: aabb.near,
+                x: aabb.max.x,
+                y: aabb.min.y,
+                z: aabb.min.z,
             };
             let near_top_left = Vec3 {
-                x: aabb.left,
-                y: aabb.top,
-                z: aabb.near,
+                x: aabb.min.x,
+                y: aabb.max.y,
+                z: aabb.min.z,
             };
             let near_top_right = Vec3 {
-                x: aabb.right,
-                y: aabb.top,
-                z: aabb.near,
+                x: aabb.max.x,
+                y: aabb.max.y,
+                z: aabb.min.z,
             };
 
             let far_bottom_left = Vec3 {
-                x: aabb.left,
-                y: aabb.bottom,
-                z: aabb.far,
+                x: aabb.min.x,
+                y: aabb.min.y,
+                z: aabb.max.z,
             };
             let far_bottom_right = Vec3 {
-                x: aabb.right,
-                y: aabb.bottom,
-                z: aabb.far,
+                x: aabb.max.x,
+                y: aabb.min.y,
+                z: aabb.max.z,
             };
             let far_top_left = Vec3 {
-                x: aabb.left,
-                y: aabb.top,
-                z: aabb.far,
+                x: aabb.min.x,
+                y: aabb.max.y,
+                z: aabb.max.z,
             };
             let far_top_right = Vec3 {
-                x: aabb.right,
-                y: aabb.top,
-                z: aabb.far,
+                x: aabb.max.x,
+                y: aabb.max.y,
+                z: aabb.max.z,
             };
 
             let lines = [
@@ -818,12 +858,7 @@ fn main() {
             shadow_maps::Light {
                 shadow_view,
                 shadow_projection: Matrix4::ortho(
-                    aabb.left,
-                    aabb.right,
-                    aabb.bottom,
-                    aabb.top,
-                    aabb.near,
-                    aabb.far,
+                    aabb.min.x, aabb.max.x, aabb.min.y, aabb.max.y, aabb.min.z, aabb.max.z,
                 ),
                 shadow_map_atlas_position: position.into(),
                 shadow_map_atlas_size: [size, size],

@@ -1,4 +1,5 @@
 use crate::{
+    aabb::Aabb,
     material::MaterialId,
     matrix::Matrix4,
     objects::{ObjectData, ObjectId, Objects},
@@ -15,7 +16,7 @@ pub fn load_model(
     file_name: &str,
     transform: Matrix4,
     material_id: MaterialId,
-) {
+) -> Aabb {
     let (models, _materials) = tobj::load_obj(
         file_name,
         &tobj::LoadOptions {
@@ -28,7 +29,7 @@ pub fn load_model(
     let model = &models[0];
 
     let object_id = objects.insert(queue, ObjectData { transform });
-    vertex_buffer.insert_many(queue, &{
+    let vertices = {
         let mut vertices = Vec::with_capacity(model.mesh.indices.len());
 
         if model.mesh.face_arities.is_empty() {
@@ -66,7 +67,14 @@ pub fn load_model(
         }
 
         vertices
+    };
+    vertex_buffer.insert_many(queue, &vertices);
+
+    let model_aabb = vertices.into_iter().fold(Aabb::EMPTY, |aabb, vertex| {
+        aabb.union(Aabb::point(vertex.position))
     });
+
+    transform * model_aabb
 }
 
 enum NormalStyle {

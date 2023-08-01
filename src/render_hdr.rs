@@ -1,4 +1,5 @@
 use crate::{
+    camera::CameraUniform,
     gpu_buffer::GpuBuffer,
     light::{DirectionalLightGpu, PointLightGpu},
     material::Materials,
@@ -133,8 +134,13 @@ impl RenderHdr {
                 view: depth_texture_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
-                    // What effect does this have? Is it overwritten by `depth_write_enabled`?
-                    store: false,
+                    /*
+                    What effect does this have? Is it overwritten by `depth_write_enabled`?
+
+                    Answer: this controls whether the values written to the depth texture are
+                    visible to subsequent passes that use this depth texture.
+                    */
+                    store: true,
                 }),
                 stencil_ops: None,
             }),
@@ -147,7 +153,7 @@ impl RenderHdr {
 }
 
 pub struct BindGroup0<'a> {
-    pub camera: &'a wgpu::Buffer,
+    pub camera: &'a GpuBuffer<CameraUniform>,
     pub objects: &'a Objects,
     pub display_normals: &'a wgpu::Buffer,
     pub point_lights: &'a GpuBuffer<PointLightGpu>,
@@ -178,7 +184,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.camera,
+                    buffer: self.camera.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),

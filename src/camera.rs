@@ -2,7 +2,7 @@ use crate::{matrix::Matrix4, point::Point3};
 
 pub struct Camera {
     /// The camera's position.
-    pub eye: cgmath::Point3<f32>,
+    pub eye: Point3,
 
     /// The direction in which the camera is looking.
     pub direction: cgmath::Vector3<f32>,
@@ -31,7 +31,7 @@ impl Camera {
     [clip space coordinates](https://www.w3.org/TR/webgpu/#clip-space-coordinates).
      */
     pub fn clip_coordinates_matrix(&self) -> Matrix4 {
-        let view = Matrix4::look_to(self.eye.into(), self.direction.into(), self.up.into());
+        let view = Matrix4::look_to(self.eye, self.direction.into(), self.up.into());
         let perspective = Matrix4::perspective(self.fovy, self.aspect, self.near, self.far);
         perspective * view
     }
@@ -39,7 +39,7 @@ impl Camera {
     pub fn to_uniform(&self) -> CameraUniform {
         let view_proj = self.clip_coordinates_matrix();
         CameraUniform {
-            eye: self.eye.into(),
+            eye: self.eye,
             zfar: self.far,
             view_proj,
             view_proj_inv: view_proj.inverse(),

@@ -1,6 +1,9 @@
 use cgmath::Transform;
 
-use crate::{point::Point3, vector::Vec3};
+use crate::{
+    point::{Point3, Point4},
+    vector::Vec3,
+};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -82,5 +85,13 @@ impl std::ops::Mul for Matrix4 {
 
     fn mul(self, rhs: Self) -> Self::Output {
         Self::from(cgmath::Matrix4::<f32>::from(self) * cgmath::Matrix4::<f32>::from(rhs))
+    }
+}
+
+impl std::ops::Mul<Point4> for Matrix4 {
+    type Output = Point4;
+
+    fn mul(self, rhs: Point4) -> Self::Output {
+        Point4::from(cgmath::Matrix4::from(self) * cgmath::Vector4::from(rhs))
     }
 }

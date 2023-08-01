@@ -67,7 +67,7 @@ impl ShadowMaps {
                 front_face: wgpu::FrontFace::Ccw,
                 // Front culling means I need less depth bias.
                 cull_mode: Some(wgpu::Face::Front),
-                unclipped_depth: false,
+                unclipped_depth: true,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },

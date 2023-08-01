@@ -1,5 +1,3 @@
-use cgmath::Point1;
-
 use crate::point::Point3;
 
 #[repr(C)]

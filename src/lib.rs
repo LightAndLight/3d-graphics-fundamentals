@@ -1,5 +1,6 @@
 pub mod camera;
 pub mod color;
+pub mod debug_light_frustum;
 pub mod gpu_buffer;
 pub mod light;
 pub mod load;

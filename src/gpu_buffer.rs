@@ -43,6 +43,16 @@ impl<T: Sized + bytemuck::Pod> GpuBuffer<T> {
         next_free_index
     }
 
+    pub fn update(&mut self, queue: &wgpu::Queue, index: u32, data: T) {
+        assert!(index < self.size);
+
+        queue.write_buffer(
+            &self.buffer,
+            index as u64 * std::mem::size_of::<T>() as u64,
+            bytemuck::cast_slice(&[data]),
+        );
+    }
+
     pub fn remove(&mut self, _index: u32) {
         todo!()
     }

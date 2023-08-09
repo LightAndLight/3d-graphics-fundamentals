@@ -25,6 +25,7 @@ use it::{
     point::{Point3, Point4},
     render_hdr::{self, RenderHdr},
     render_sky::{self, RenderSky},
+    render_wireframe::{self, RenderWireframe},
     shadow_map_atlas::ShadowMapAtlas,
     shadow_maps::{self, ShadowMaps},
     shape,
@@ -40,6 +41,7 @@ use winit::{
 };
 
 const DEBUG_LIGHT_FRUSTUM: bool = true;
+const DEBUG_CAMERA_FRUSTUM: bool = true;
 
 struct Fps {
     frame_times: Vec<Duration>,
@@ -578,91 +580,25 @@ fn main() {
         camera_proj_view_inverse: Matrix4,
         shadow_view: Matrix4,
     ) -> Aabb {
-        let camera_clip_near_topleft = Point4 {
-            x: -1.0,
-            y: 1.0,
-            z: 0.0,
-            w: 1.0,
-        };
-        let camera_clip_near_topright = Point4 {
-            x: 1.0,
-            y: 1.0,
-            z: 0.0,
-            w: 1.0,
-        };
-        let camera_clip_near_bottomleft = Point4 {
-            x: -1.0,
-            y: -1.0,
-            z: 0.0,
-            w: 1.0,
-        };
-        let camera_clip_near_bottomright = Point4 {
-            x: 1.0,
-            y: -1.0,
-            z: 0.0,
-            w: 1.0,
-        };
-
-        let camera_clip_far_topleft = Point4 {
-            x: -1.0,
-            y: 1.0,
-            z: 1.0,
-            w: 1.0,
-        };
-        let camera_clip_far_topright = Point4 {
-            x: 1.0,
-            y: 1.0,
-            z: 1.0,
-            w: 1.0,
-        };
-        let camera_clip_far_bottomleft = Point4 {
-            x: -1.0,
-            y: -1.0,
-            z: 1.0,
-            w: 1.0,
-        };
-        let camera_clip_far_bottomright = Point4 {
-            x: 1.0,
-            y: -1.0,
-            z: 1.0,
-            w: 1.0,
-        };
-
-        let camera_world_near_topleft =
-            Point3::from(camera_proj_view_inverse * camera_clip_near_topleft) + camera.eye;
-        let camera_world_near_topright =
-            Point3::from(camera_proj_view_inverse * camera_clip_near_topright) + camera.eye;
-        let camera_world_near_bottomleft =
-            Point3::from(camera_proj_view_inverse * camera_clip_near_bottomleft) + camera.eye;
-        let camera_world_near_bottomright =
-            Point3::from(camera_proj_view_inverse * camera_clip_near_bottomright) + camera.eye;
-
-        let camera_world_far_topleft =
-            Point3::from(camera_proj_view_inverse * camera_clip_far_topleft) + camera.eye;
-        let camera_world_far_topright =
-            Point3::from(camera_proj_view_inverse * camera_clip_far_topright) + camera.eye;
-        let camera_world_far_bottomleft =
-            Point3::from(camera_proj_view_inverse * camera_clip_far_bottomleft) + camera.eye;
-        let camera_world_far_bottomright =
-            Point3::from(camera_proj_view_inverse * camera_clip_far_bottomright) + camera.eye;
+        let camera_frustum_world_space = camera.frustum_world_space();
 
         let camera_shadow_near_topleft =
-            Point3::from(shadow_view * camera_world_near_topleft.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.near_top_left.with_w(1.0));
         let camera_shadow_near_topright =
-            Point3::from(shadow_view * camera_world_near_topright.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.near_top_right.with_w(1.0));
         let camera_shadow_near_bottomleft =
-            Point3::from(shadow_view * camera_world_near_bottomleft.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.near_bottom_left.with_w(1.0));
         let camera_shadow_near_bottomright =
-            Point3::from(shadow_view * camera_world_near_bottomright.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.near_bottom_right.with_w(1.0));
 
         let camera_shadow_far_topleft =
-            Point3::from(shadow_view * camera_world_far_topleft.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.far_top_left.with_w(1.0));
         let camera_shadow_far_topright =
-            Point3::from(shadow_view * camera_world_far_topright.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.far_top_right.with_w(1.0));
         let camera_shadow_far_bottomleft =
-            Point3::from(shadow_view * camera_world_far_bottomleft.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.far_bottom_left.with_w(1.0));
         let camera_shadow_far_bottomright =
-            Point3::from(shadow_view * camera_world_far_bottomright.with_w(1.0));
+            Point3::from(shadow_view * camera_frustum_world_space.far_bottom_right.with_w(1.0));
 
         let camera_shadow_points = [
             camera_shadow_near_topleft,
@@ -820,7 +756,7 @@ fn main() {
         }
     }
 
-    let mut debug_light_frustum_vertex_buffer: GpuBuffer<Vec3> = GpuBuffer::new(
+    let mut debug_light_frustum_vertex_buffer: GpuBuffer<Point3> = GpuBuffer::new(
         &device,
         Some("debug_light_frustum_vertex_buffer"),
         wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX,
@@ -869,66 +805,7 @@ fn main() {
         if DEBUG_LIGHT_FRUSTUM {
             debug_light_frustum_shadow_view_inverse.insert(&queue, shadow_view.inverse());
 
-            let near_bottom_left = Vec3 {
-                x: aabb.min.x,
-                y: aabb.min.y,
-                z: aabb.max.z,
-            };
-            let near_bottom_right = Vec3 {
-                x: aabb.max.x,
-                y: aabb.min.y,
-                z: aabb.max.z,
-            };
-            let near_top_left = Vec3 {
-                x: aabb.min.x,
-                y: aabb.max.y,
-                z: aabb.max.z,
-            };
-            let near_top_right = Vec3 {
-                x: aabb.max.x,
-                y: aabb.max.y,
-                z: aabb.max.z,
-            };
-
-            let far_bottom_left = Vec3 {
-                x: aabb.min.x,
-                y: aabb.min.y,
-                z: aabb.min.z,
-            };
-            let far_bottom_right = Vec3 {
-                x: aabb.max.x,
-                y: aabb.min.y,
-                z: aabb.min.z,
-            };
-            let far_top_left = Vec3 {
-                x: aabb.min.x,
-                y: aabb.max.y,
-                z: aabb.min.z,
-            };
-            let far_top_right = Vec3 {
-                x: aabb.max.x,
-                y: aabb.max.y,
-                z: aabb.min.z,
-            };
-
-            let lines = [
-                // near
-                (near_bottom_left, near_bottom_right),
-                (near_bottom_right, near_top_right),
-                (near_top_right, near_top_left),
-                (near_top_left, near_bottom_left),
-                // far
-                (far_bottom_left, far_bottom_right),
-                (far_bottom_right, far_top_right),
-                (far_top_right, far_top_left),
-                (far_top_left, far_bottom_left),
-                // joining
-                (near_bottom_left, far_bottom_left),
-                (near_bottom_right, far_bottom_right),
-                (near_top_left, far_top_left),
-                (near_top_right, far_top_right),
-            ];
-            for (from, to) in lines {
+            for (from, to) in aabb.as_cuboid().wireframe_mesh() {
                 debug_light_frustum_vertex_buffer.insert(&queue, from);
                 debug_light_frustum_vertex_buffer.insert(&queue, to);
             }
@@ -1144,6 +1021,32 @@ fn main() {
         ));
     }
 
+    let mut render_wireframe_vertex_buffer = GpuBuffer::new(
+        &device,
+        Some("render_wireframe_vertex_buffer"),
+        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        24 + if DEBUG_CAMERA_FRUSTUM { 24 } else { 0 },
+    );
+    for (from, to) in shadow_caster_scene_bounds.as_cuboid().wireframe_mesh() {
+        render_wireframe_vertex_buffer.insert(&queue, from);
+        render_wireframe_vertex_buffer.insert(&queue, to);
+    }
+    if DEBUG_CAMERA_FRUSTUM {
+        let camera_frustum = camera.frustum_world_space();
+        for (from, to) in camera_frustum.wireframe_mesh() {
+            render_wireframe_vertex_buffer.insert(&queue, from);
+            render_wireframe_vertex_buffer.insert(&queue, to);
+        }
+    }
+    let render_wireframe = RenderWireframe::new(
+        &device,
+        surface_format,
+        depth_texture_format,
+        render_wireframe::BindGroup0 {
+            camera: &camera_buffer,
+        },
+    );
+
     let mut w_held = false;
     let mut a_held = false;
     let mut s_held = false;
@@ -1274,7 +1177,6 @@ fn main() {
                         camera.clip_coordinates_matrix().inverse(),
                         directional_light_info.shadow_view,
                     );
-                    let aabb = dbg!(aabb);
                     shadow_map_lights_buffer.update(
                         &queue,
                         directional_light_info.shadow_map_id,
@@ -1358,6 +1260,13 @@ fn main() {
                             &debug_light_frustum_vertex_buffer,
                         );
                     }
+
+                    render_wireframe.record(
+                        &mut command_encoder,
+                        &surface_texture_view,
+                        &depth_texture_view,
+                        &render_wireframe_vertex_buffer,
+                    );
 
                     command_encoder.finish()
                 };

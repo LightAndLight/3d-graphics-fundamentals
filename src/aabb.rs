@@ -1,4 +1,4 @@
-use crate::{matrix::Matrix4, point::Point3};
+use crate::{cuboid::Cuboid, matrix::Matrix4, point::Point3};
 
 #[derive(Debug)]
 pub struct Aabb {
@@ -36,6 +36,61 @@ impl Aabb {
 
     pub fn valid(&self) -> bool {
         self.min.x <= self.max.x && self.min.y <= self.max.y && self.min.z <= self.max.z
+    }
+
+    pub fn as_cuboid(&self) -> Cuboid {
+        let near_top_left = Point3 {
+            x: self.min.x,
+            y: self.max.y,
+            z: self.max.z,
+        };
+        let near_top_right = Point3 {
+            x: self.max.x,
+            y: self.max.y,
+            z: self.max.z,
+        };
+        let near_bottom_left = Point3 {
+            x: self.min.x,
+            y: self.min.y,
+            z: self.max.z,
+        };
+        let near_bottom_right = Point3 {
+            x: self.max.x,
+            y: self.min.y,
+            z: self.max.z,
+        };
+
+        let far_top_left = Point3 {
+            x: self.min.x,
+            y: self.max.y,
+            z: self.min.z,
+        };
+        let far_top_right = Point3 {
+            x: self.max.x,
+            y: self.max.y,
+            z: self.min.z,
+        };
+        let far_bottom_left = Point3 {
+            x: self.min.x,
+            y: self.min.y,
+            z: self.min.z,
+        };
+        let far_bottom_right = Point3 {
+            x: self.max.x,
+            y: self.min.y,
+            z: self.min.z,
+        };
+
+        Cuboid {
+            near_top_left,
+            near_top_right,
+            near_bottom_left,
+            near_bottom_right,
+            far_top_left,
+            far_top_right,
+            far_bottom_left,
+            far_bottom_right,
+        }
     }
 }
 

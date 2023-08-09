@@ -1,5 +1,64 @@
-use crate::{matrix::Matrix4, point::Point3};
+use crate::{
+    cuboid::Cuboid,
+    matrix::Matrix4,
+    point::{Point3, Point4},
+};
 
+const CLIP_NEAR_TOP_LEFT: Point4 = Point4 {
+    x: -1.0,
+    y: 1.0,
+    z: 0.0,
+    w: 1.0,
+};
+
+const CLIP_NEAR_TOP_RIGHT: Point4 = Point4 {
+    x: 1.0,
+    y: 1.0,
+    z: 0.0,
+    w: 1.0,
+};
+
+const CLIP_NEAR_BOTTOM_LEFT: Point4 = Point4 {
+    x: -1.0,
+    y: -1.0,
+    z: 0.0,
+    w: 1.0,
+};
+
+const CLIP_NEAR_BOTTOM_RIGHT: Point4 = Point4 {
+    x: 1.0,
+    y: -1.0,
+    z: 0.0,
+    w: 1.0,
+};
+
+const CLIP_FAR_TOP_LEFT: Point4 = Point4 {
+    x: -1.0,
+    y: 1.0,
+    z: 1.0,
+    w: 1.0,
+};
+
+const CLIP_FAR_TOP_RIGHT: Point4 = Point4 {
+    x: 1.0,
+    y: 1.0,
+    z: 1.0,
+    w: 1.0,
+};
+
+const CLIP_FAR_BOTTOM_LEFT: Point4 = Point4 {
+    x: -1.0,
+    y: -1.0,
+    z: 1.0,
+    w: 1.0,
+};
+
+const CLIP_FAR_BOTTOM_RIGHT: Point4 = Point4 {
+    x: 1.0,
+    y: -1.0,
+    z: 1.0,
+    w: 1.0,
+};
 pub struct Camera {
     /// The camera's position.
     pub eye: Point3,
@@ -43,6 +102,21 @@ impl Camera {
             zfar: self.far,
             view_proj,
             view_proj_inv: view_proj.inverse(),
+        }
+    }
+
+    pub fn frustum_world_space(&self) -> Cuboid {
+        let clip_to_world = self.clip_coordinates_matrix().inverse();
+
+        Cuboid {
+            near_top_left: Point3::from(clip_to_world * CLIP_NEAR_TOP_LEFT) + self.eye,
+            near_top_right: Point3::from(clip_to_world * CLIP_NEAR_TOP_RIGHT) + self.eye,
+            near_bottom_left: Point3::from(clip_to_world * CLIP_NEAR_BOTTOM_LEFT) + self.eye,
+            near_bottom_right: Point3::from(clip_to_world * CLIP_NEAR_BOTTOM_RIGHT) + self.eye,
+            far_top_left: Point3::from(clip_to_world * CLIP_FAR_TOP_LEFT) + self.eye,
+            far_top_right: Point3::from(clip_to_world * CLIP_FAR_TOP_RIGHT) + self.eye,
+            far_bottom_left: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_LEFT) + self.eye,
+            far_bottom_right: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_RIGHT) + self.eye,
         }
     }
 }

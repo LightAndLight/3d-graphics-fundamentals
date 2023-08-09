@@ -381,11 +381,22 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
         vec4<f32>(input.world_position, 1.0);
       let fragment_depth = fragment_light_space.z / fragment_light_space.w;
 
+      let fragment_shadow_map_uv = fragment_light_space.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5);
+      /*
+      var shadow_map_blend: vec3<f32>;
+      if fragment_shadow_map_uv.x >= 0.0 && fragment_shadow_map_uv.y >= 0.0 && fragment_shadow_map_uv.x <= 1.0 && fragment_shadow_map_uv.y <= 1.0 {
+        shadow_map_blend = vec3<f32>(1.0, 0.5, 0.5);
+      } else {
+        shadow_map_blend = vec3<f32>(1.0);
+      }
+      */
+
       luminance +=
+        // shadow_map_blend *
         textureSampleCompare(
           shadow_map_atlas,
           shadow_map_atlas_sampler,
-          shadow_map_atlas_sample_coords(shadow_map_light, fragment_light_space.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5)),
+          shadow_map_atlas_sample_coords(shadow_map_light, fragment_shadow_map_uv),
           fragment_depth
         ) *
         PI *

@@ -22,7 +22,7 @@ use it::{
     material::{Material, Materials},
     matrix::Matrix4,
     objects::{ObjectData, Objects},
-    point::{Point3, Point4},
+    point::Point3,
     render_hdr::{self, RenderHdr},
     render_sky::{self, RenderSky},
     render_wireframe::{self, RenderWireframe},
@@ -80,12 +80,33 @@ impl Fps {
     }
 }
 
+struct MouseLook {
+    enabled: bool,
+}
+
+impl MouseLook {
+    fn new(window: &Window, enabled: bool) -> Self {
+        let mut this = Self { enabled };
+        this.set(window, enabled);
+        this
+    }
+
+    fn set(&mut self, window: &Window, value: bool) {
+        window.set_cursor_visible(!value);
+        self.enabled = value;
+    }
+
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+}
+
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
 
-    window.set_cursor_visible(false);
+    let mut mouse_look = MouseLook::new(&window, true);
 
     let mut fps = Fps::new();
 
@@ -577,7 +598,6 @@ fn main() {
     fn fit_orthographic_projection_to_camera(
         scene_bounds: &Aabb,
         camera: &Camera,
-        camera_proj_view_inverse: Matrix4,
         shadow_view: Matrix4,
     ) -> Aabb {
         let camera_frustum_world_space = camera.frustum_world_space();
@@ -797,7 +817,6 @@ fn main() {
         let aabb = fit_orthographic_projection_to_camera(
             &shadow_caster_scene_bounds,
             &camera,
-            camera.clip_coordinates_matrix().inverse(),
             shadow_view,
         );
         debug_assert!(aabb.valid(), "invalid aabb: {:?}", aabb);
@@ -820,8 +839,10 @@ fn main() {
                     aabb.max.x,
                     aabb.min.y,
                     aabb.max.y,
-                    0.0,
-                    -(aabb.min.z - aabb.max.z),
+                    // `ortho` takes positive near/far arguments but still assumes that far is
+                    // towards -Z.
+                    -aabb.max.z,
+                    -aabb.min.z,
                 ),
                 shadow_map_atlas_position: position.into(),
                 shadow_map_atlas_size: [size, size],
@@ -1047,6 +1068,9 @@ fn main() {
         },
     );
 
+    let mut render_egui = egui_wgpu::renderer::Renderer::new(&device, surface_format, None, 1);
+    let mut context = egui::Context::default();
+
     let mut w_held = false;
     let mut a_held = false;
     let mut s_held = false;
@@ -1068,7 +1092,7 @@ fn main() {
                         },
                     ..
                 } => {
-                    *control_flow = ControlFlow::Exit;
+                    mouse_look.set(&window, false);
                 }
                 WindowEvent::Resized(physical_size) => {
                     surface_config.width = physical_size.width;
@@ -1131,12 +1155,14 @@ fn main() {
             Event::MainEventsCleared => {
                 fps.start_frame();
                 window.request_redraw();
-                window
-                    .set_cursor_position(winit::dpi::PhysicalPosition {
-                        x: surface_config.width as f32 / 2.0,
-                        y: surface_config.height as f32 / 2.0,
-                    })
-                    .unwrap();
+                if mouse_look.enabled() {
+                    window
+                        .set_cursor_position(winit::dpi::PhysicalPosition {
+                            x: surface_config.width as f32 / 2.0,
+                            y: surface_config.height as f32 / 2.0,
+                        })
+                        .unwrap();
+                }
             }
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 if w_held {
@@ -1174,7 +1200,6 @@ fn main() {
                     let aabb = fit_orthographic_projection_to_camera(
                         &shadow_caster_scene_bounds,
                         &camera,
-                        camera.clip_coordinates_matrix().inverse(),
                         directional_light_info.shadow_view,
                     );
                     shadow_map_lights_buffer.update(
@@ -1187,8 +1212,8 @@ fn main() {
                                 aabb.max.x,
                                 aabb.min.y,
                                 aabb.max.y,
-                                0.0,
-                                -(aabb.min.z - aabb.max.z),
+                                -aabb.max.z,
+                                -aabb.min.z,
                             ),
                             shadow_map_atlas_position: directional_light_info
                                 .shadow_map_atlas_position
@@ -1268,6 +1293,47 @@ fn main() {
                         &render_wireframe_vertex_buffer,
                     );
 
+                    {
+                        let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
+                            size_in_pixels: [surface_config.width, surface_config.height],
+                            pixels_per_point: 1.0,
+                        };
+
+                        let full_output = context.run(egui::RawInput::default(), |context| {
+                            egui::Window::new("Debug").show(context, |ui| {
+                                if ui.button("Exit").clicked() {
+                                    *control_flow = ControlFlow::Exit;
+                                }
+                            });
+                        });
+                        let paint_jobs = context.tessellate(full_output.shapes);
+                        for (id, image_delta) in &full_output.textures_delta.set {
+                            render_egui.update_texture(&device, &queue, *id, image_delta);
+                        }
+                        render_egui.update_buffers(
+                            &device,
+                            &queue,
+                            &mut command_encoder,
+                            &paint_jobs,
+                            &screen_descriptor,
+                        );
+
+                        let mut render_pass =
+                            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                label: Some("egui_pass"),
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &surface_texture_view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Load,
+                                        store: true,
+                                    },
+                                })],
+                                depth_stencil_attachment: None,
+                            });
+                        render_egui.render(&mut render_pass, &paint_jobs, &screen_descriptor)
+                    }
+
                     command_encoder.finish()
                 };
 
@@ -1283,14 +1349,16 @@ fn main() {
                     },
                 ..
             } => {
-                camera.direction = cgmath::Quaternion::from_axis_angle(
-                    camera.up,
-                    cgmath::Deg(-delta_x as f32 / 10.0),
-                ) * cgmath::Quaternion::from_axis_angle(
-                    camera.up.cross(camera.direction),
-                    cgmath::Deg(delta_y as f32 / 10.0),
-                ) * camera.direction;
-                camera_updated = true;
+                if mouse_look.enabled() {
+                    camera.direction = cgmath::Quaternion::from_axis_angle(
+                        camera.up,
+                        cgmath::Deg(-delta_x as f32 / 10.0),
+                    ) * cgmath::Quaternion::from_axis_angle(
+                        camera.up.cross(camera.direction),
+                        cgmath::Deg(delta_y as f32 / 10.0),
+                    ) * camera.direction;
+                    camera_updated = true;
+                }
             }
             _ => {}
         }

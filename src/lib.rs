@@ -1,5 +1,6 @@
 pub mod aabb;
 pub mod camera;
+pub mod clip;
 pub mod color;
 pub mod debug_light_frustum;
 pub mod gpu_buffer;

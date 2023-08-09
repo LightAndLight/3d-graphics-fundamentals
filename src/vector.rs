@@ -1,3 +1,5 @@
+use cgmath::InnerSpace;
+
 use crate::point::Point3;
 
 #[repr(C)]
@@ -37,6 +39,14 @@ impl Vec3 {
         cgmath::Vector3::<f32>::from(self)
             .cross(cgmath::Vector3::<f32>::from(rhs))
             .into()
+    }
+
+    pub fn dot(self, rhs: Self) -> f32 {
+        cgmath::Vector3::<f32>::from(self).dot(cgmath::Vector3::<f32>::from(rhs))
+    }
+
+    pub fn length(self) -> f32 {
+        cgmath::Vector3::<f32>::from(self).magnitude()
     }
 
     pub fn normalize(self) -> Self {
@@ -95,6 +105,18 @@ impl std::ops::Add for Vec3 {
             x: self.x + rhs.x,
             y: self.y + rhs.y,
             z: self.z + rhs.z,
+        }
+    }
+}
+
+impl std::ops::Mul<Vec3> for f32 {
+    type Output = Vec3;
+
+    fn mul(self, rhs: Vec3) -> Self::Output {
+        Vec3 {
+            x: self * rhs.x,
+            y: self * rhs.y,
+            z: self * rhs.z,
         }
     }
 }

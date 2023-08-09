@@ -9,6 +9,7 @@ use image::codecs::hdr::HdrDecoder;
 use it::{
     aabb::Aabb,
     camera::{Camera, CameraUniform},
+    clip,
     color::Color,
     debug_light_frustum::{self, DebugLightFrustum},
     gpu_buffer::GpuBuffer,
@@ -28,7 +29,7 @@ use it::{
     shadow_maps::{self, ShadowMaps},
     shape,
     tone_mapping::{self, ToneMapping},
-    vector::Vec3,
+    vector::{Vec2, Vec3},
     vertex_buffer::VertexBuffer,
 };
 use wgpu::util::DeviceExt;
@@ -674,75 +675,147 @@ fn main() {
             camera_shadow_far_bottomright,
         ];
 
-        fn compare(a: &f32, b: &f32) -> std::cmp::Ordering {
-            a.partial_cmp(b).unwrap()
+        let scene_bounds_light_space = shadow_view * scene_bounds;
+
+        let (left, right, bottom, top) = camera_shadow_points.iter().fold(
+            (
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+            ),
+            |(left, right, bottom, top), point| {
+                (
+                    left.min(point.x),
+                    right.max(point.x),
+                    bottom.min(point.y),
+                    top.max(point.y),
+                )
+            },
+        );
+
+        let left_clipping_plane = clip::Plane::new(Vec3::X, scene_bounds_light_space.min);
+        let right_clipping_plane = clip::Plane::new(-Vec3::X, scene_bounds_light_space.max);
+        let bottom_clipping_plane = clip::Plane::new(Vec3::Y, scene_bounds_light_space.min);
+        let top_clipping_plane = clip::Plane::new(-Vec3::Y, scene_bounds_light_space.max);
+
+        fn clip_triangles_against_plane(
+            plane: clip::Plane,
+            triangles: Vec<clip::Triangle>,
+        ) -> Vec<clip::Triangle> {
+            triangles
+                .into_iter()
+                .map(move |triangle| (clip::clip_triangle(&plane, &triangle), triangle))
+                .fold(Vec::new(), |mut triangles, (clip_result, triangle)| {
+                    match clip_result {
+                        clip::ClippedTriangle::Accept => {
+                            triangles.push(triangle);
+                        }
+                        clip::ClippedTriangle::Reject => {}
+                        clip::ClippedTriangle::Split1(triangle) => {
+                            triangles.push(triangle);
+                        }
+                        clip::ClippedTriangle::Split2(triangle1, triangle2) => {
+                            triangles.push(triangle1);
+                            triangles.push(triangle2);
+                        }
+                    };
+                    triangles
+                })
         }
 
-        let left = camera_shadow_points
-            .iter()
-            .map(|point| point.x)
-            .min_by(compare)
-            .unwrap();
-        let right = camera_shadow_points
-            .iter()
-            .map(|point| point.x)
-            .max_by(compare)
-            .unwrap();
-        let bottom = camera_shadow_points
-            .iter()
-            .map(|point| point.y)
-            .min_by(compare)
-            .unwrap();
-        let top = camera_shadow_points
-            .iter()
-            .map(|point| point.y)
-            .max_by(compare)
-            .unwrap();
-        let near = f32::max(
-            Point3::from(
-                shadow_view
-                    * Point4 {
-                        x: scene_bounds.min.x,
-                        y: scene_bounds.min.y,
-                        z: scene_bounds.min.z,
-                        w: 1.0,
-                    },
-            )
-            .z,
-            camera_shadow_points
-                .iter()
-                .map(|point| point.z)
-                .min_by(compare)
-                .unwrap(),
-        );
-        let far = f32::min(
-            Point3::from(
-                shadow_view
-                    * Point4 {
-                        x: scene_bounds.max.x,
-                        y: scene_bounds.max.y,
-                        z: scene_bounds.max.z,
-                        w: 1.0,
-                    },
-            )
-            .z,
-            camera_shadow_points
-                .iter()
-                .map(|point| point.z)
-                .max_by(compare)
-                .unwrap(),
+        let triangles: Vec<clip::Triangle> = {
+            let near_top_left = Point3 {
+                x: scene_bounds_light_space.min.x,
+                y: scene_bounds_light_space.max.y,
+                z: scene_bounds_light_space.max.z,
+            };
+            let near_top_right = Point3 {
+                x: scene_bounds_light_space.max.x,
+                y: scene_bounds_light_space.max.y,
+                z: scene_bounds_light_space.max.z,
+            };
+            let near_bottom_left = Point3 {
+                x: scene_bounds_light_space.min.x,
+                y: scene_bounds_light_space.min.y,
+                z: scene_bounds_light_space.max.z,
+            };
+            let near_bottom_right = Point3 {
+                x: scene_bounds_light_space.max.x,
+                y: scene_bounds_light_space.min.y,
+                z: scene_bounds_light_space.max.z,
+            };
+
+            let far_top_left = Point3 {
+                x: scene_bounds_light_space.min.x,
+                y: scene_bounds_light_space.max.y,
+                z: scene_bounds_light_space.min.z,
+            };
+            let far_top_right = Point3 {
+                x: scene_bounds_light_space.max.x,
+                y: scene_bounds_light_space.max.y,
+                z: scene_bounds_light_space.min.z,
+            };
+            let far_bottom_left = Point3 {
+                x: scene_bounds_light_space.min.x,
+                y: scene_bounds_light_space.min.y,
+                z: scene_bounds_light_space.min.z,
+            };
+            let far_bottom_right = Point3 {
+                x: scene_bounds_light_space.max.x,
+                y: scene_bounds_light_space.min.y,
+                z: scene_bounds_light_space.min.z,
+            };
+
+            vec![
+                // Near face
+                clip::Triangle(near_top_right, near_top_left, near_bottom_left),
+                clip::Triangle(near_top_right, near_bottom_left, near_bottom_right),
+                // Far face
+                clip::Triangle(far_top_right, far_top_left, far_bottom_left),
+                clip::Triangle(far_top_right, far_bottom_left, far_bottom_right),
+                // Top face
+                clip::Triangle(far_top_right, far_top_left, near_top_left),
+                clip::Triangle(far_top_right, near_top_left, near_top_right),
+                // Bottom face
+                clip::Triangle(near_bottom_right, near_bottom_left, far_bottom_left),
+                clip::Triangle(near_bottom_right, far_bottom_left, far_bottom_right),
+                // Left face
+                clip::Triangle(near_top_left, far_top_left, far_bottom_left),
+                clip::Triangle(near_top_left, far_bottom_left, near_bottom_left),
+                // Right face
+                clip::Triangle(far_top_right, near_top_right, near_bottom_right),
+                clip::Triangle(far_top_right, near_bottom_right, far_bottom_right),
+            ]
+        };
+        let clipped_triangles: Vec<clip::Triangle> =
+            clip_triangles_against_plane(left_clipping_plane, triangles);
+        let clipped_triangles: Vec<clip::Triangle> =
+            clip_triangles_against_plane(right_clipping_plane, clipped_triangles);
+        let clipped_triangles: Vec<clip::Triangle> =
+            clip_triangles_against_plane(bottom_clipping_plane, clipped_triangles);
+        let clipped_triangles: Vec<clip::Triangle> =
+            clip_triangles_against_plane(top_clipping_plane, clipped_triangles);
+
+        let (near, far) = clipped_triangles.into_iter().fold(
+            (f32::NEG_INFINITY, f32::INFINITY),
+            |acc, triangle| {
+                triangle.into_iter().fold(acc, |(near, far), point| {
+                    (near.max(point.z), far.min(point.z))
+                })
+            },
         );
 
         Aabb {
             min: Point3 {
                 x: left,
                 y: bottom,
-                z: near,
+                z: far,
             },
             max: Point3 {
                 x: right,
                 y: top,
-                z: far,
+                z: near,
             },
         }
     }
@@ -767,7 +840,14 @@ fn main() {
         10,
     );
     let mut directional_lights = Vec::new();
-    {
+
+    struct DirectionalLightInfo {
+        shadow_map_id: u32,
+        shadow_view: Matrix4,
+        shadow_map_atlas_position: Vec2,
+        shadow_map_atlas_size: f32,
+    }
+    let directional_light_info = {
         let direction = Vec3 {
             x: 1.0,
             y: -1.0,
@@ -784,6 +864,7 @@ fn main() {
             camera.clip_coordinates_matrix().inverse(),
             shadow_view,
         );
+        debug_assert!(aabb.valid(), "invalid aabb: {:?}", aabb);
 
         if DEBUG_LIGHT_FRUSTUM {
             debug_light_frustum_shadow_view_inverse.insert(&queue, shadow_view.inverse());
@@ -791,43 +872,43 @@ fn main() {
             let near_bottom_left = Vec3 {
                 x: aabb.min.x,
                 y: aabb.min.y,
-                z: aabb.min.z,
+                z: aabb.max.z,
             };
             let near_bottom_right = Vec3 {
                 x: aabb.max.x,
                 y: aabb.min.y,
-                z: aabb.min.z,
+                z: aabb.max.z,
             };
             let near_top_left = Vec3 {
                 x: aabb.min.x,
                 y: aabb.max.y,
-                z: aabb.min.z,
+                z: aabb.max.z,
             };
             let near_top_right = Vec3 {
                 x: aabb.max.x,
                 y: aabb.max.y,
-                z: aabb.min.z,
+                z: aabb.max.z,
             };
 
             let far_bottom_left = Vec3 {
                 x: aabb.min.x,
                 y: aabb.min.y,
-                z: aabb.max.z,
+                z: aabb.min.z,
             };
             let far_bottom_right = Vec3 {
                 x: aabb.max.x,
                 y: aabb.min.y,
-                z: aabb.max.z,
+                z: aabb.min.z,
             };
             let far_top_left = Vec3 {
                 x: aabb.min.x,
                 y: aabb.max.y,
-                z: aabb.max.z,
+                z: aabb.min.z,
             };
             let far_top_right = Vec3 {
                 x: aabb.max.x,
                 y: aabb.max.y,
-                z: aabb.max.z,
+                z: aabb.min.z,
             };
 
             let lines = [
@@ -858,7 +939,12 @@ fn main() {
             shadow_maps::Light {
                 shadow_view,
                 shadow_projection: Matrix4::ortho(
-                    aabb.min.x, aabb.max.x, aabb.min.y, aabb.max.y, aabb.min.z, aabb.max.z,
+                    aabb.min.x,
+                    aabb.max.x,
+                    aabb.min.y,
+                    aabb.max.y,
+                    0.0,
+                    -(aabb.min.z - aabb.max.z),
                 ),
                 shadow_map_atlas_position: position.into(),
                 shadow_map_atlas_size: [size, size],
@@ -878,7 +964,14 @@ fn main() {
             shadow_map_light_gpu_id: id,
             shadow_map_atlas_entry,
         });
-    }
+
+        DirectionalLightInfo {
+            shadow_map_id: id,
+            shadow_view,
+            shadow_map_atlas_position: position,
+            shadow_map_atlas_size: size,
+        }
+    };
 
     /*
     A floating point depth buffer is pretty important for working with a high `camera.near` to
@@ -1174,6 +1267,37 @@ fn main() {
                 if camera_updated {
                     camera_buffer.update(&queue, 0, camera.to_uniform());
                     camera_updated = false;
+
+                    let aabb = fit_orthographic_projection_to_camera(
+                        &shadow_caster_scene_bounds,
+                        &camera,
+                        camera.clip_coordinates_matrix().inverse(),
+                        directional_light_info.shadow_view,
+                    );
+                    let aabb = dbg!(aabb);
+                    shadow_map_lights_buffer.update(
+                        &queue,
+                        directional_light_info.shadow_map_id,
+                        shadow_maps::Light {
+                            shadow_view: directional_light_info.shadow_view,
+                            shadow_projection: Matrix4::ortho(
+                                aabb.min.x,
+                                aabb.max.x,
+                                aabb.min.y,
+                                aabb.max.y,
+                                0.0,
+                                -(aabb.min.z - aabb.max.z),
+                            ),
+                            shadow_map_atlas_position: directional_light_info
+                                .shadow_map_atlas_position
+                                .into(),
+                            shadow_map_atlas_size: [
+                                directional_light_info.shadow_map_atlas_size,
+                                directional_light_info.shadow_map_atlas_size,
+                            ],
+                            _padding: [0, 0, 0, 0, 0, 0, 0],
+                        },
+                    );
                 }
 
                 if display_normals_updated {

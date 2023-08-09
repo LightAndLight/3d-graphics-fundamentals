@@ -39,6 +39,18 @@ impl Add for Point3 {
     }
 }
 
+impl Add<Vec3> for Point3 {
+    type Output = Point3;
+
+    fn add(self, rhs: Vec3) -> Self::Output {
+        Point3 {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
+    }
+}
+
 impl Sub for Point3 {
     type Output = Vec3;
 

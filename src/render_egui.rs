@@ -12,12 +12,13 @@ impl RenderEgui {
     pub fn new(
         device: &wgpu::Device,
         surface_format: wgpu::TextureFormat,
+        pixels_per_point: f32,
         width: u32,
         height: u32,
     ) -> Self {
         let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
             size_in_pixels: [width, height],
-            pixels_per_point: 1.0,
+            pixels_per_point,
         };
 
         let egui_wgpu_renderer =

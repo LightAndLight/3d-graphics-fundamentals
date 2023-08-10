@@ -3,7 +3,6 @@ pub mod camera;
 pub mod clip;
 pub mod color;
 pub mod cuboid;
-pub mod debug_light_frustum;
 pub mod gpu_buffer;
 pub mod light;
 pub mod load;

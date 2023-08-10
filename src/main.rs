@@ -11,7 +11,6 @@ use it::{
     camera::{self, Camera, CameraUniform},
     clip,
     color::Color,
-    debug_light_frustum::{self, DebugLightFrustum},
     gpu_buffer::GpuBuffer,
     light::{
         DirectionalLight, DirectionalLightGpu, PointLight, PointLightGpu, PointLightShadowMapFace,
@@ -40,8 +39,6 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
-
-const DEBUG_LIGHT_FRUSTUM: bool = true;
 
 struct Fps {
     frame_times: Vec<Duration>,
@@ -573,37 +570,18 @@ fn main() {
         shadow_view: Matrix4,
     ) -> Aabb {
         let camera_frustum_world_space = camera.frustum_world_space();
-
-        let camera_shadow_near_topleft =
-            Point3::from(shadow_view * camera_frustum_world_space.near_top_left.with_w(1.0));
-        let camera_shadow_near_topright =
-            Point3::from(shadow_view * camera_frustum_world_space.near_top_right.with_w(1.0));
-        let camera_shadow_near_bottomleft =
-            Point3::from(shadow_view * camera_frustum_world_space.near_bottom_left.with_w(1.0));
-        let camera_shadow_near_bottomright =
-            Point3::from(shadow_view * camera_frustum_world_space.near_bottom_right.with_w(1.0));
-
-        let camera_shadow_far_topleft =
-            Point3::from(shadow_view * camera_frustum_world_space.far_top_left.with_w(1.0));
-        let camera_shadow_far_topright =
-            Point3::from(shadow_view * camera_frustum_world_space.far_top_right.with_w(1.0));
-        let camera_shadow_far_bottomleft =
-            Point3::from(shadow_view * camera_frustum_world_space.far_bottom_left.with_w(1.0));
-        let camera_shadow_far_bottomright =
-            Point3::from(shadow_view * camera_frustum_world_space.far_bottom_right.with_w(1.0));
+        let camera_frustum_light_space = shadow_view * camera_frustum_world_space;
 
         let camera_shadow_points = [
-            camera_shadow_near_topleft,
-            camera_shadow_near_topright,
-            camera_shadow_near_bottomleft,
-            camera_shadow_near_bottomright,
-            camera_shadow_far_topleft,
-            camera_shadow_far_topright,
-            camera_shadow_far_bottomleft,
-            camera_shadow_far_bottomright,
+            camera_frustum_light_space.near_top_left,
+            camera_frustum_light_space.near_top_right,
+            camera_frustum_light_space.near_bottom_left,
+            camera_frustum_light_space.near_bottom_right,
+            camera_frustum_light_space.far_top_left,
+            camera_frustum_light_space.far_top_right,
+            camera_frustum_light_space.far_bottom_left,
+            camera_frustum_light_space.far_bottom_right,
         ];
-
-        let scene_bounds_light_space = shadow_view * scene_bounds;
 
         let (left, right, bottom, top) = camera_shadow_points.iter().fold(
             (
@@ -622,10 +600,38 @@ fn main() {
             },
         );
 
-        let left_clipping_plane = clip::Plane::new(Vec3::X, scene_bounds_light_space.min);
-        let right_clipping_plane = clip::Plane::new(-Vec3::X, scene_bounds_light_space.max);
-        let bottom_clipping_plane = clip::Plane::new(Vec3::Y, scene_bounds_light_space.min);
-        let top_clipping_plane = clip::Plane::new(-Vec3::Y, scene_bounds_light_space.max);
+        let left_clipping_plane = clip::Plane::new(
+            Vec3::X,
+            Point3 {
+                x: left,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let right_clipping_plane = clip::Plane::new(
+            -Vec3::X,
+            Point3 {
+                x: right,
+                y: 0.0,
+                z: 0.0,
+            },
+        );
+        let bottom_clipping_plane = clip::Plane::new(
+            Vec3::Y,
+            Point3 {
+                x: 0.0,
+                y: bottom,
+                z: 0.0,
+            },
+        );
+        let top_clipping_plane = clip::Plane::new(
+            -Vec3::Y,
+            Point3 {
+                x: 0.0,
+                y: top,
+                z: 0.0,
+            },
+        );
 
         fn clip_triangles_against_plane(
             plane: clip::Plane,
@@ -651,6 +657,8 @@ fn main() {
                     triangles
                 })
         }
+
+        let scene_bounds_light_space = shadow_view * scene_bounds;
 
         let triangles: Vec<clip::Triangle> = {
             let near_top_left = Point3 {
@@ -734,7 +742,7 @@ fn main() {
             },
         );
 
-        Aabb {
+        dbg!(Aabb {
             min: Point3 {
                 x: left,
                 y: bottom,
@@ -745,21 +753,8 @@ fn main() {
                 y: top,
                 z: near,
             },
-        }
+        })
     }
-
-    let mut debug_light_frustum_vertex_buffer: GpuBuffer<Point3> = GpuBuffer::new(
-        &device,
-        Some("debug_light_frustum_vertex_buffer"),
-        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX,
-        24,
-    );
-    let mut debug_light_frustum_shadow_view_inverse: GpuBuffer<Matrix4> = GpuBuffer::new(
-        &device,
-        Some("debug_light_frustum_shadow_view_inverse"),
-        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        1,
-    );
 
     let mut directional_lights_buffer: GpuBuffer<DirectionalLightGpu> = GpuBuffer::new(
         &device,
@@ -772,8 +767,10 @@ fn main() {
     struct DirectionalLightInfo {
         shadow_map_id: u32,
         shadow_view: Matrix4,
+        shadow_view_inverse: Matrix4,
         shadow_map_atlas_position: Vec2,
         shadow_map_atlas_size: f32,
+        aabb: Aabb,
     }
     let directional_light_info = {
         let direction = Vec3 {
@@ -792,15 +789,6 @@ fn main() {
             shadow_view,
         );
         debug_assert!(aabb.valid(), "invalid aabb: {:?}", aabb);
-
-        if DEBUG_LIGHT_FRUSTUM {
-            debug_light_frustum_shadow_view_inverse.insert(&queue, shadow_view.inverse());
-
-            for (from, to) in aabb.as_cuboid().wireframe_mesh() {
-                debug_light_frustum_vertex_buffer.insert(&queue, from);
-                debug_light_frustum_vertex_buffer.insert(&queue, to);
-            }
-        }
 
         let id = shadow_map_lights_buffer.insert(
             &queue,
@@ -838,8 +826,10 @@ fn main() {
         DirectionalLightInfo {
             shadow_map_id: id,
             shadow_view,
+            shadow_view_inverse: shadow_view.inverse(),
             shadow_map_atlas_position: position,
             shadow_map_atlas_size: size,
+            aabb,
         }
     };
 
@@ -1021,19 +1011,6 @@ fn main() {
         },
     );
 
-    let mut debug_light_frustum: Option<DebugLightFrustum> = None;
-    if DEBUG_LIGHT_FRUSTUM {
-        debug_light_frustum = Some(DebugLightFrustum::new(
-            &device,
-            surface_format,
-            depth_texture_format,
-            debug_light_frustum::BindGroup0 {
-                shadow_view_inverse: &debug_light_frustum_shadow_view_inverse,
-                camera: &camera_buffer,
-            },
-        ));
-    }
-
     let mut render_wireframe_vertex_buffer: GpuBuffer<render_wireframe::VertexInput> =
         GpuBuffer::new(
             &device,
@@ -1061,6 +1038,34 @@ fn main() {
             );
         }
     }
+
+    let (
+        directional_light_frustum_model_matrix_id,
+        directional_light_frustum_wireframe_vertex_buffer_offset,
+    ) = {
+        let model_matrix_id =
+            model_matrices.insert(&queue, directional_light_info.shadow_view_inverse);
+
+        let offset = render_wireframe_vertex_buffer.len();
+
+        for (from, to) in directional_light_info.aabb.as_cuboid().wireframe_mesh() {
+            render_wireframe_vertex_buffer.insert(
+                &queue,
+                render_wireframe::VertexInput {
+                    position: from,
+                    model_matrix_id,
+                },
+            );
+            render_wireframe_vertex_buffer.insert(
+                &queue,
+                render_wireframe::VertexInput {
+                    position: to,
+                    model_matrix_id,
+                },
+            );
+        }
+        (model_matrix_id, offset)
+    };
 
     let mut render_camera_frustum_wireframe = true;
     let mut render_camera_frustum_wireframe_updated = false;
@@ -1091,6 +1096,7 @@ fn main() {
                 },
             );
         }
+
         model_matrix_id
     };
 
@@ -1104,13 +1110,16 @@ fn main() {
         },
     );
 
+    let pixels_per_point = 2.0;
     let mut render_egui = RenderEgui::new(
         &device,
         surface_format,
+        pixels_per_point,
         surface_config.width,
         surface_config.height,
     );
     let mut egui_winit_state = egui_winit::State::new(&window);
+    egui_winit_state.set_pixels_per_point(pixels_per_point);
     let egui_context = egui::Context::default();
 
     let mut mouse_look = camera::MouseLook::new(&window, true);
@@ -1277,6 +1286,30 @@ fn main() {
                             },
                         );
 
+                        for (index, (from, to)) in
+                            aabb.as_cuboid().wireframe_mesh().into_iter().enumerate()
+                        {
+                            render_wireframe_vertex_buffer.update(
+                                &queue,
+                                directional_light_frustum_wireframe_vertex_buffer_offset
+                                    + 2 * index as u32,
+                                render_wireframe::VertexInput {
+                                    position: from,
+                                    model_matrix_id: directional_light_frustum_model_matrix_id,
+                                },
+                            );
+                            render_wireframe_vertex_buffer.update(
+                                &queue,
+                                directional_light_frustum_wireframe_vertex_buffer_offset
+                                    + 2 * index as u32
+                                    + 1,
+                                render_wireframe::VertexInput {
+                                    position: to,
+                                    model_matrix_id: directional_light_frustum_model_matrix_id,
+                                },
+                            );
+                        }
+
                         model_matrices.update(
                             &queue,
                             camera_frustum_model_matrix_id,
@@ -1347,15 +1380,6 @@ fn main() {
                     }
 
                     tone_mapping.record(&mut command_encoder, &surface_texture_view);
-
-                    if DEBUG_LIGHT_FRUSTUM {
-                        debug_light_frustum.as_ref().unwrap().record(
-                            &mut command_encoder,
-                            &surface_texture_view,
-                            &depth_texture_view,
-                            &debug_light_frustum_vertex_buffer,
-                        );
-                    }
 
                     render_wireframe.record(
                         &mut command_encoder,

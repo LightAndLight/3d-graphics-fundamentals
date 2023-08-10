@@ -12,6 +12,7 @@ pub mod material;
 pub mod matrix;
 pub mod objects;
 pub mod point;
+pub mod render_egui;
 pub mod render_hdr;
 pub mod render_sky;
 pub mod render_wireframe;

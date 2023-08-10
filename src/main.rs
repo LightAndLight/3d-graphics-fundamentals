@@ -8,7 +8,7 @@ use cgmath::Rotation3;
 use image::codecs::hdr::HdrDecoder;
 use it::{
     aabb::Aabb,
-    camera::{Camera, CameraUniform},
+    camera::{self, Camera, CameraUniform},
     clip,
     color::Color,
     debug_light_frustum::{self, DebugLightFrustum},
@@ -23,6 +23,7 @@ use it::{
     matrix::Matrix4,
     objects::{ObjectData, Objects},
     point::Point3,
+    render_egui::RenderEgui,
     render_hdr::{self, RenderHdr},
     render_sky::{self, RenderSky},
     render_wireframe::{self, RenderWireframe},
@@ -80,33 +81,10 @@ impl Fps {
     }
 }
 
-struct MouseLook {
-    enabled: bool,
-}
-
-impl MouseLook {
-    fn new(window: &Window, enabled: bool) -> Self {
-        let mut this = Self { enabled };
-        this.set(window, enabled);
-        this
-    }
-
-    fn set(&mut self, window: &Window, value: bool) {
-        window.set_cursor_visible(!value);
-        self.enabled = value;
-    }
-
-    fn enabled(&self) -> bool {
-        self.enabled
-    }
-}
-
 fn main() {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
-
-    let mut mouse_look = MouseLook::new(&window, true);
 
     let mut fps = Fps::new();
 
@@ -929,6 +907,22 @@ fn main() {
         },
     );
 
+    let mut show_directional_shadow_map_coverage_buffer = GpuBuffer::new(
+        &device,
+        Some("show_directional_shadow_map_coverage_buffer"),
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        1,
+    );
+    let mut show_directional_shadow_map_coverage = false;
+    show_directional_shadow_map_coverage_buffer.insert(
+        &queue,
+        if show_directional_shadow_map_coverage {
+            1
+        } else {
+            0
+        },
+    );
+
     let render_hdr = RenderHdr::new(
         &device,
         hdr_render_target_format,
@@ -945,6 +939,9 @@ fn main() {
             shadow_map_lights: &shadow_map_lights_buffer,
             sky_texture: &sky_texture_view,
             sky_texture_sampler: &sky_texture_sampler,
+        },
+        render_hdr::BindGroup1 {
+            show_directional_shadow_map_coverage: &show_directional_shadow_map_coverage_buffer,
         },
     );
 
@@ -1068,90 +1065,114 @@ fn main() {
         },
     );
 
-    let mut render_egui = egui_wgpu::renderer::Renderer::new(&device, surface_format, None, 1);
-    let mut context = egui::Context::default();
+    let mut render_egui = RenderEgui::new(
+        &device,
+        surface_format,
+        surface_config.width,
+        surface_config.height,
+    );
+    let mut egui_winit_state = egui_winit::State::new(&window);
+    let egui_context = egui::Context::default();
+
+    let mut mouse_look = camera::MouseLook::new(&window, true);
 
     let mut w_held = false;
     let mut a_held = false;
     let mut s_held = false;
     let mut d_held = false;
 
+    let mut propagate_camera_updates = true;
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
         match event {
-            Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested
-                | WindowEvent::Destroyed
-                | WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
+            Event::WindowEvent { window_id, event } if window_id == window.id() => {
+                let response = egui_winit_state.on_event(&egui_context, &event);
+
+                if !response.consumed {
+                    match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::Destroyed
+                        | WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    state: ElementState::Pressed,
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    ..
+                                },
                             ..
-                        },
-                    ..
-                } => {
-                    mouse_look.set(&window, false);
-                }
-                WindowEvent::Resized(physical_size) => {
-                    surface_config.width = physical_size.width;
-                    surface_config.height = physical_size.height;
-                    surface.configure(&device, &surface_config);
+                        } => {
+                            mouse_look.set(&window, false);
+                        }
+                        WindowEvent::Resized(physical_size) => {
+                            surface_config.width = physical_size.width;
+                            surface_config.height = physical_size.height;
+                            surface.configure(&device, &surface_config);
 
-                    camera.aspect = surface_config.width as f32 / surface_config.height as f32;
-                }
-                WindowEvent::KeyboardInput { input, .. } => {
-                    if let Some(keycode) = input.virtual_keycode {
-                        match keycode {
-                            VirtualKeyCode::W => match input.state {
-                                ElementState::Pressed => {
-                                    w_held = true;
-                                }
-                                ElementState::Released => {
-                                    w_held = false;
-                                }
-                            },
-                            VirtualKeyCode::A => match input.state {
-                                ElementState::Pressed => {
-                                    a_held = true;
-                                }
-                                ElementState::Released => {
-                                    a_held = false;
-                                }
-                            },
-                            VirtualKeyCode::S => match input.state {
-                                ElementState::Pressed => {
-                                    s_held = true;
-                                }
-                                ElementState::Released => {
-                                    s_held = false;
-                                }
-                            },
-                            VirtualKeyCode::D => match input.state {
-                                ElementState::Pressed => {
-                                    d_held = true;
-                                }
-                                ElementState::Released => {
-                                    d_held = false;
-                                }
-                            },
-                            VirtualKeyCode::N => {
-                                if let ElementState::Pressed = input.state {
-                                    display_normals = !display_normals;
-                                    display_normals_updated = true;
+                            camera.aspect =
+                                surface_config.width as f32 / surface_config.height as f32;
+                        }
+                        WindowEvent::KeyboardInput { input, .. } => {
+                            if let Some(keycode) = input.virtual_keycode {
+                                match keycode {
+                                    VirtualKeyCode::W => match input.state {
+                                        ElementState::Pressed => {
+                                            w_held = true;
+                                        }
+                                        ElementState::Released => {
+                                            w_held = false;
+                                        }
+                                    },
+                                    VirtualKeyCode::A => match input.state {
+                                        ElementState::Pressed => {
+                                            a_held = true;
+                                        }
+                                        ElementState::Released => {
+                                            a_held = false;
+                                        }
+                                    },
+                                    VirtualKeyCode::S => match input.state {
+                                        ElementState::Pressed => {
+                                            s_held = true;
+                                        }
+                                        ElementState::Released => {
+                                            s_held = false;
+                                        }
+                                    },
+                                    VirtualKeyCode::D => match input.state {
+                                        ElementState::Pressed => {
+                                            d_held = true;
+                                        }
+                                        ElementState::Released => {
+                                            d_held = false;
+                                        }
+                                    },
+                                    VirtualKeyCode::N => {
+                                        if let ElementState::Pressed = input.state {
+                                            display_normals = !display_normals;
+                                            display_normals_updated = true;
 
-                                    // Disable tone mapping when displaying normals.
-                                    tone_mapping_enabled = !display_normals;
-                                    tone_mapping_enabled_updated = true;
+                                            // Disable tone mapping when displaying normals.
+                                            tone_mapping_enabled = !display_normals;
+                                            tone_mapping_enabled_updated = true;
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
-                            _ => {}
                         }
+                        WindowEvent::MouseInput {
+                            state: winit::event::ElementState::Pressed,
+                            button: winit::event::MouseButton::Left,
+                            ..
+                        } if !mouse_look.enabled() => {
+                            mouse_look.set(&window, true);
+                        }
+                        _ => {}
                     }
                 }
-                _ => {}
-            },
+            }
             Event::MainEventsCleared => {
                 fps.start_frame();
                 window.request_redraw();
@@ -1197,34 +1218,36 @@ fn main() {
                     camera_buffer.update(&queue, 0, camera.to_uniform());
                     camera_updated = false;
 
-                    let aabb = fit_orthographic_projection_to_camera(
-                        &shadow_caster_scene_bounds,
-                        &camera,
-                        directional_light_info.shadow_view,
-                    );
-                    shadow_map_lights_buffer.update(
-                        &queue,
-                        directional_light_info.shadow_map_id,
-                        shadow_maps::Light {
-                            shadow_view: directional_light_info.shadow_view,
-                            shadow_projection: Matrix4::ortho(
-                                aabb.min.x,
-                                aabb.max.x,
-                                aabb.min.y,
-                                aabb.max.y,
-                                -aabb.max.z,
-                                -aabb.min.z,
-                            ),
-                            shadow_map_atlas_position: directional_light_info
-                                .shadow_map_atlas_position
-                                .into(),
-                            shadow_map_atlas_size: [
-                                directional_light_info.shadow_map_atlas_size,
-                                directional_light_info.shadow_map_atlas_size,
-                            ],
-                            _padding: [0, 0, 0, 0, 0, 0, 0],
-                        },
-                    );
+                    if propagate_camera_updates {
+                        let aabb = fit_orthographic_projection_to_camera(
+                            &shadow_caster_scene_bounds,
+                            &camera,
+                            directional_light_info.shadow_view,
+                        );
+                        shadow_map_lights_buffer.update(
+                            &queue,
+                            directional_light_info.shadow_map_id,
+                            shadow_maps::Light {
+                                shadow_view: directional_light_info.shadow_view,
+                                shadow_projection: Matrix4::ortho(
+                                    aabb.min.x,
+                                    aabb.max.x,
+                                    aabb.min.y,
+                                    aabb.max.y,
+                                    -aabb.max.z,
+                                    -aabb.min.z,
+                                ),
+                                shadow_map_atlas_position: directional_light_info
+                                    .shadow_map_atlas_position
+                                    .into(),
+                                shadow_map_atlas_size: [
+                                    directional_light_info.shadow_map_atlas_size,
+                                    directional_light_info.shadow_map_atlas_size,
+                                ],
+                                _padding: [0, 0, 0, 0, 0, 0, 0],
+                            },
+                        );
+                    }
                 }
 
                 if display_normals_updated {
@@ -1293,46 +1316,39 @@ fn main() {
                         &render_wireframe_vertex_buffer,
                     );
 
-                    {
-                        let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
-                            size_in_pixels: [surface_config.width, surface_config.height],
-                            pixels_per_point: 1.0,
-                        };
-
-                        let full_output = context.run(egui::RawInput::default(), |context| {
-                            egui::Window::new("Debug").show(context, |ui| {
-                                if ui.button("Exit").clicked() {
-                                    *control_flow = ControlFlow::Exit;
-                                }
-                            });
-                        });
-                        let paint_jobs = context.tessellate(full_output.shapes);
-                        for (id, image_delta) in &full_output.textures_delta.set {
-                            render_egui.update_texture(&device, &queue, *id, image_delta);
-                        }
-                        render_egui.update_buffers(
-                            &device,
-                            &queue,
-                            &mut command_encoder,
-                            &paint_jobs,
-                            &screen_descriptor,
-                        );
-
-                        let mut render_pass =
-                            command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                label: Some("egui_pass"),
-                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                    view: &surface_texture_view,
-                                    resolve_target: None,
-                                    ops: wgpu::Operations {
-                                        load: wgpu::LoadOp::Load,
-                                        store: true,
+                    render_egui.record(
+                        &device,
+                        &queue,
+                        &window,
+                        &mut egui_winit_state,
+                        &egui_context,
+                        &mouse_look,
+                        &mut command_encoder,
+                        &surface_texture_view,
+                        &mut |ui| {
+                            ui.checkbox(&mut propagate_camera_updates, "Propagate camera updates");
+                            if ui
+                                .checkbox(
+                                    &mut show_directional_shadow_map_coverage,
+                                    "Show directional shadow map coverage",
+                                )
+                                .changed()
+                            {
+                                show_directional_shadow_map_coverage_buffer.update(
+                                    &queue,
+                                    0,
+                                    if show_directional_shadow_map_coverage {
+                                        1
+                                    } else {
+                                        0
                                     },
-                                })],
-                                depth_stencil_attachment: None,
-                            });
-                        render_egui.render(&mut render_pass, &paint_jobs, &screen_descriptor)
-                    }
+                                );
+                            };
+                            if ui.button("Exit").clicked() {
+                                *control_flow = ControlFlow::Exit;
+                            }
+                        },
+                    );
 
                     command_encoder.finish()
                 };

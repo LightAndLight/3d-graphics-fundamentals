@@ -12,6 +12,8 @@ use crate::{
 pub struct RenderHdr {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
     pub bind_group_0: wgpu::BindGroup,
+    pub bind_group_layout_1: wgpu::BindGroupLayout,
+    pub bind_group_1: wgpu::BindGroup,
     pub pipeline_layout: wgpu::PipelineLayout,
     pub shader_module: wgpu::ShaderModule,
     pub render_pipeline: wgpu::RenderPipeline,
@@ -23,12 +25,14 @@ impl RenderHdr {
         render_target_format: wgpu::TextureFormat,
         depth_texture_format: wgpu::TextureFormat,
         bind_group_0: BindGroup0,
+        bind_group_1: BindGroup1,
     ) -> Self {
         let (bind_group_layout_0, bind_group_0) = bind_group_0.create(device);
+        let (bind_group_layout_1, bind_group_1) = bind_group_1.create(device);
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("render_hdr_pipeline_layout"),
-            bind_group_layouts: &[&bind_group_layout_0],
+            bind_group_layouts: &[&bind_group_layout_0, &bind_group_layout_1],
             push_constant_ranges: &[],
         });
 
@@ -90,6 +94,8 @@ impl RenderHdr {
         Self {
             bind_group_layout_0,
             bind_group_0,
+            bind_group_layout_1,
+            bind_group_1,
             pipeline_layout,
             shader_module,
             render_pipeline,
@@ -147,6 +153,7 @@ impl RenderHdr {
         });
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
+        render_pass.set_bind_group(1, &self.bind_group_1, &[]);
         render_pass.set_vertex_buffer(0, vertex_buffer.as_raw_slice());
         render_pass.draw(0..vertex_buffer.len() as u32, 0..1);
     }
@@ -430,6 +437,50 @@ impl<'a> BindGroup0<'a> {
                 sky_texture.1,
                 sky_texture_sampler.1,
             ],
+        });
+
+        (layout, bind_group)
+    }
+}
+
+pub struct BindGroup1<'a> {
+    pub show_directional_shadow_map_coverage: &'a GpuBuffer<u32>,
+}
+
+impl<'a> BindGroup1<'a> {
+    pub fn create(&self, device: &wgpu::Device) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+        // @group(1) @binding(0)
+        // var<uniform> show_directional_shadow_map_coverage: bool;
+        let show_directional_shadow_map_coverage = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: self.show_directional_shadow_map_coverage.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        );
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("render_hdr_bind_group_layout_1"),
+            entries: &[show_directional_shadow_map_coverage.0],
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("render_hdr_bind_group_1"),
+            layout: &layout,
+            entries: &[show_directional_shadow_map_coverage.1],
         });
 
         (layout, bind_group)

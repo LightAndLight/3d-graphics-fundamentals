@@ -94,6 +94,9 @@ var sky_texture: texture_2d<f32>;
 @group(0) @binding(10)
 var sky_texture_sampler: sampler;
 
+@group(1) @binding(0)
+var<uniform> show_directional_shadow_map_coverage: u32; // bool
+
 fn srgb_to_linear_scalar(srgb: f32) -> f32 {
   if srgb <= 0.04045 {
     return srgb / 12.92;
@@ -382,17 +385,15 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
       let fragment_depth = fragment_light_space.z / fragment_light_space.w;
 
       let fragment_shadow_map_uv = fragment_light_space.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5);
-      /*
-      var shadow_map_blend: vec3<f32>;
-      if fragment_shadow_map_uv.x >= 0.0 && fragment_shadow_map_uv.y >= 0.0 && fragment_shadow_map_uv.x <= 1.0 && fragment_shadow_map_uv.y <= 1.0 {
-        shadow_map_blend = vec3<f32>(1.0, 0.5, 0.5);
-      } else {
-        shadow_map_blend = vec3<f32>(1.0);
+      var shadow_map_coverage_multiplier = vec3<f32>(1.0);
+      if show_directional_shadow_map_coverage == 1u {
+        if fragment_shadow_map_uv.x >= 0.0 && fragment_shadow_map_uv.y >= 0.0 && fragment_shadow_map_uv.x <= 1.0 && fragment_shadow_map_uv.y <= 1.0 {
+          shadow_map_coverage_multiplier = vec3<f32>(1.0, 0.5, 0.5);
+        }
       }
-      */
 
       luminance +=
-        // shadow_map_blend *
+        shadow_map_coverage_multiplier *
         textureSampleCompare(
           shadow_map_atlas,
           shadow_map_atlas_sampler,

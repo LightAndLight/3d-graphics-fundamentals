@@ -1,3 +1,5 @@
+use winit::window::Window;
+
 use crate::{
     cuboid::Cuboid,
     matrix::Matrix4,
@@ -128,4 +130,25 @@ pub struct CameraUniform {
     pub zfar: f32,
     pub view_proj: Matrix4,
     pub view_proj_inv: Matrix4,
+}
+
+pub struct MouseLook {
+    enabled: bool,
+}
+
+impl MouseLook {
+    pub fn new(window: &Window, enabled: bool) -> Self {
+        let mut this = Self { enabled };
+        this.set(window, enabled);
+        this
+    }
+
+    pub fn set(&mut self, window: &Window, value: bool) {
+        window.set_cursor_visible(!value);
+        self.enabled = value;
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
 }

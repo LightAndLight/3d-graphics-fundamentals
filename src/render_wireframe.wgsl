@@ -9,14 +9,19 @@ struct Camera{
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
+@group(0) @binding(1)
+var<storage, read> model_matrices: array<mat4x4<f32>>;
+
 struct VertexInput{
   @location(0) position: vec3<f32>,
+  @location(1) model_matrix_id: u32,
 }
 
 @vertex
 fn vertex_main(input: VertexInput) -> @builtin(position) vec4<f32> {
   return
     camera.view_proj *
+    model_matrices[input.model_matrix_id] *
     vec4<f32>(input.position, 1.0);
 }
 

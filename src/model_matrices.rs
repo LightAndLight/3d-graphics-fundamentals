@@ -21,6 +21,10 @@ impl ModelMatrices {
         ModelMatrixId(index)
     }
 
+    pub fn update(&mut self, queue: &wgpu::Queue, id: ModelMatrixId, value: Matrix4) {
+        self.0.update(queue, id.0, value)
+    }
+
     pub fn remove(&mut self, _object_id: ModelMatrixId) {
         todo!()
     }

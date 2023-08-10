@@ -42,7 +42,6 @@ use winit::{
 };
 
 const DEBUG_LIGHT_FRUSTUM: bool = true;
-const DEBUG_CAMERA_FRUSTUM: bool = true;
 
 struct Fps {
     frame_times: Vec<Duration>,
@@ -1035,29 +1034,73 @@ fn main() {
         ));
     }
 
-    let mut render_wireframe_vertex_buffer = GpuBuffer::new(
-        &device,
-        Some("render_wireframe_vertex_buffer"),
-        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        24 + if DEBUG_CAMERA_FRUSTUM { 24 } else { 0 },
-    );
-    for (from, to) in shadow_caster_scene_bounds.as_cuboid().wireframe_mesh() {
-        render_wireframe_vertex_buffer.insert(&queue, from);
-        render_wireframe_vertex_buffer.insert(&queue, to);
-    }
-    if DEBUG_CAMERA_FRUSTUM {
-        let camera_frustum = camera.frustum_world_space();
-        for (from, to) in camera_frustum.wireframe_mesh() {
-            render_wireframe_vertex_buffer.insert(&queue, from);
-            render_wireframe_vertex_buffer.insert(&queue, to);
+    let mut render_wireframe_vertex_buffer: GpuBuffer<render_wireframe::VertexInput> =
+        GpuBuffer::new(
+            &device,
+            Some("render_wireframe_vertex_buffer"),
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            100,
+        );
+
+    {
+        let model_matrix_id = model_matrices.insert(&queue, Matrix4::IDENTITY);
+        for (from, to) in shadow_caster_scene_bounds.as_cuboid().wireframe_mesh() {
+            render_wireframe_vertex_buffer.insert(
+                &queue,
+                render_wireframe::VertexInput {
+                    position: from,
+                    model_matrix_id,
+                },
+            );
+            render_wireframe_vertex_buffer.insert(
+                &queue,
+                render_wireframe::VertexInput {
+                    position: to,
+                    model_matrix_id,
+                },
+            );
         }
     }
+
+    let mut render_camera_frustum_wireframe = true;
+    let mut render_camera_frustum_wireframe_updated = false;
+    let camera_frustum_model_matrix_id = {
+        let camera_frustum = camera.frustum_camera_space();
+
+        /* So the camera's "model" matrix is the inverse of its view matrix (<https://jsantell.com/model-view-projection/>).
+        That's cool!
+
+        A "model" matrix takes model-space coordinates to world-space coordinates. "Camera-space" is the camera's model-space,
+        and the view matrix takes world-space coordinates to camera-space coordinates, which is the inverse of the "model" transformation.
+        */
+        let model_matrix_id = model_matrices.insert(&queue, camera.view_matrix().inverse());
+
+        for (from, to) in camera_frustum.wireframe_mesh() {
+            render_wireframe_vertex_buffer.insert(
+                &queue,
+                render_wireframe::VertexInput {
+                    position: from,
+                    model_matrix_id,
+                },
+            );
+            render_wireframe_vertex_buffer.insert(
+                &queue,
+                render_wireframe::VertexInput {
+                    position: to,
+                    model_matrix_id,
+                },
+            );
+        }
+        model_matrix_id
+    };
+
     let render_wireframe = RenderWireframe::new(
         &device,
         surface_format,
         depth_texture_format,
         render_wireframe::BindGroup0 {
             camera: &camera_buffer,
+            model_matrices: &model_matrices,
         },
     );
 
@@ -1233,6 +1276,12 @@ fn main() {
                                 _padding: [0, 0, 0, 0, 0, 0, 0],
                             },
                         );
+
+                        model_matrices.update(
+                            &queue,
+                            camera_frustum_model_matrix_id,
+                            camera.view_matrix().inverse(),
+                        );
                     }
                 }
 
@@ -1341,6 +1390,13 @@ fn main() {
                                 .checkbox(
                                     &mut show_directional_shadow_map_coverage,
                                     "Show directional shadow map coverage",
+                                )
+                                .changed();
+
+                            render_camera_frustum_wireframe_updated = ui
+                                .checkbox(
+                                    &mut render_camera_frustum_wireframe,
+                                    "Render camera frustum wireframe",
                                 )
                                 .changed();
 

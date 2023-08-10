@@ -45,6 +45,15 @@ const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 );
 
 impl Matrix4 {
+    pub const IDENTITY: Self = Matrix4 {
+        value: [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ],
+    };
+
     pub fn perspective(fovy: f32, aspect: f32, near: f32, far: f32) -> Self {
         let perspective = cgmath::perspective(cgmath::Deg(fovy), aspect, near, far);
         Self::from(OPENGL_TO_WGPU_MATRIX * perspective)

@@ -1,6 +1,39 @@
 use wgpu::include_wgsl;
 
-use crate::{camera::CameraUniform, gpu_buffer::GpuBuffer, point::Point3, vector::Vec3};
+use crate::{
+    camera::CameraUniform,
+    gpu_buffer::GpuBuffer,
+    matrix::Matrix4,
+    model_matrices::{ModelMatrices, ModelMatrixId},
+    point::Point3,
+    vector::Vec3,
+};
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct VertexInput {
+    pub position: Point3,
+    pub model_matrix_id: ModelMatrixId,
+}
+
+impl VertexInput {
+    pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<VertexInput>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &[
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Float32x3,
+                offset: 0,
+                shader_location: 0,
+            },
+            wgpu::VertexAttribute {
+                format: wgpu::VertexFormat::Uint32,
+                offset: std::mem::size_of::<Point3>() as u64,
+                shader_location: 1,
+            },
+        ],
+    };
+}
 
 pub struct RenderWireframe {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
@@ -33,15 +66,7 @@ impl RenderWireframe {
             vertex: wgpu::VertexState {
                 module: &shader_module,
                 entry_point: "vertex_main",
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vec3>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x3,
-                        offset: 0,
-                        shader_location: 0,
-                    }],
-                }],
+                buffers: &[VertexInput::LAYOUT],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader_module,
@@ -86,7 +111,7 @@ impl RenderWireframe {
         command_encoder: &mut wgpu::CommandEncoder,
         render_target_view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
-        vertex_buffer: &GpuBuffer<Point3>,
+        vertex_buffer: &GpuBuffer<VertexInput>,
     ) {
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("render_wireframe_pass"),
@@ -117,6 +142,7 @@ impl RenderWireframe {
 
 pub struct BindGroup0<'a> {
     pub camera: &'a GpuBuffer<CameraUniform>,
+    pub model_matrices: &'a ModelMatrices,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -144,15 +170,38 @@ impl<'a> BindGroup0<'a> {
             },
         );
 
+        // @group(0) @binding(1)
+        // var<storage, read> model_matrices: array<mat4x4<f32>>;
+        let model_matrices = (
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: self.model_matrices.as_raw_buffer(),
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        );
+
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("render_wireframe_bind_group_layout_0"),
-            entries: &[camera.0],
+            entries: &[camera.0, model_matrices.0],
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("render_wireframe_bind_group_0"),
             layout: &layout,
-            entries: &[camera.1],
+            entries: &[camera.1, model_matrices.1],
         });
 
         (layout, bind_group)

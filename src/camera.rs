@@ -92,9 +92,15 @@ impl Camera {
     [clip space coordinates](https://www.w3.org/TR/webgpu/#clip-space-coordinates).
      */
     pub fn clip_coordinates_matrix(&self) -> Matrix4 {
-        let view = Matrix4::look_to(self.eye, self.direction.into(), self.up.into());
-        let perspective = Matrix4::perspective(self.fovy, self.aspect, self.near, self.far);
-        perspective * view
+        self.perspective_matrix() * self.view_matrix()
+    }
+
+    pub fn view_matrix(&self) -> Matrix4 {
+        Matrix4::look_to(self.eye, self.direction.into(), self.up.into())
+    }
+
+    pub fn perspective_matrix(&self) -> Matrix4 {
+        Matrix4::perspective(self.fovy, self.aspect, self.near, self.far)
     }
 
     pub fn to_uniform(&self) -> CameraUniform {
@@ -119,6 +125,21 @@ impl Camera {
             far_top_right: Point3::from(clip_to_world * CLIP_FAR_TOP_RIGHT) + self.eye,
             far_bottom_left: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_LEFT) + self.eye,
             far_bottom_right: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_RIGHT) + self.eye,
+        }
+    }
+
+    pub fn frustum_camera_space(&self) -> Cuboid {
+        let clip_to_camera = self.perspective_matrix().inverse();
+
+        Cuboid {
+            near_top_left: Point3::from(clip_to_camera * CLIP_NEAR_TOP_LEFT),
+            near_top_right: Point3::from(clip_to_camera * CLIP_NEAR_TOP_RIGHT),
+            near_bottom_left: Point3::from(clip_to_camera * CLIP_NEAR_BOTTOM_LEFT),
+            near_bottom_right: Point3::from(clip_to_camera * CLIP_NEAR_BOTTOM_RIGHT),
+            far_top_left: Point3::from(clip_to_camera * CLIP_FAR_TOP_LEFT),
+            far_top_right: Point3::from(clip_to_camera * CLIP_FAR_TOP_RIGHT),
+            far_bottom_left: Point3::from(clip_to_camera * CLIP_FAR_BOTTOM_LEFT),
+            far_bottom_right: Point3::from(clip_to_camera * CLIP_FAR_BOTTOM_RIGHT),
         }
     }
 }

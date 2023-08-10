@@ -199,7 +199,7 @@ impl<'a> BindGroup0<'a> {
         );
 
         // @group(0) @binding(1)
-        // var<storage, read> model_matrices: array<ObjectData>;
+        // var<storage, read> model_matrices: array<mat4x4<f32>>;
         let model_matrices = (
             wgpu::BindGroupLayoutEntry {
                 binding: 1,

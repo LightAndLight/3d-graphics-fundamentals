@@ -914,6 +914,7 @@ fn main() {
         1,
     );
     let mut show_directional_shadow_map_coverage = false;
+    let mut show_directional_shadow_map_coverage_updated = false;
     show_directional_shadow_map_coverage_buffer.insert(
         &queue,
         if show_directional_shadow_map_coverage {
@@ -1148,16 +1149,6 @@ fn main() {
                                             d_held = false;
                                         }
                                     },
-                                    VirtualKeyCode::N => {
-                                        if let ElementState::Pressed = input.state {
-                                            display_normals = !display_normals;
-                                            display_normals_updated = true;
-
-                                            // Disable tone mapping when displaying normals.
-                                            tone_mapping_enabled = !display_normals;
-                                            tone_mapping_enabled_updated = true;
-                                        }
-                                    }
                                     _ => {}
                                 }
                             }
@@ -1268,6 +1259,19 @@ fn main() {
                     tone_mapping_enabled_updated = false;
                 }
 
+                if show_directional_shadow_map_coverage_updated {
+                    show_directional_shadow_map_coverage_buffer.update(
+                        &queue,
+                        0,
+                        if show_directional_shadow_map_coverage {
+                            1
+                        } else {
+                            0
+                        },
+                    );
+                    show_directional_shadow_map_coverage_updated = false;
+                }
+
                 let surface_texture = surface.get_current_texture().unwrap();
                 let surface_texture_view = surface_texture
                     .texture
@@ -1326,24 +1330,25 @@ fn main() {
                         &mut command_encoder,
                         &surface_texture_view,
                         &mut |ui| {
-                            ui.checkbox(&mut propagate_camera_updates, "Propagate camera updates");
                             if ui
+                                .checkbox(&mut display_normals, "Display normals")
+                                .changed()
+                            {
+                                display_normals_updated = true;
+
+                                // Disable tone mapping when displaying normals.
+                                tone_mapping_enabled = !display_normals;
+                                tone_mapping_enabled_updated = true;
+                            }
+                            ui.checkbox(&mut propagate_camera_updates, "Propagate camera updates");
+
+                            show_directional_shadow_map_coverage_updated = ui
                                 .checkbox(
                                     &mut show_directional_shadow_map_coverage,
                                     "Show directional shadow map coverage",
                                 )
-                                .changed()
-                            {
-                                show_directional_shadow_map_coverage_buffer.update(
-                                    &queue,
-                                    0,
-                                    if show_directional_shadow_map_coverage {
-                                        1
-                                    } else {
-                                        0
-                                    },
-                                );
-                            };
+                                .changed();
+
                             if ui.button("Exit").clicked() {
                                 *control_flow = ControlFlow::Exit;
                             }

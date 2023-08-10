@@ -6,7 +6,7 @@ use crate::{
     gpu_buffer::GpuBuffer,
     light::{DirectionalLight, PointLight},
     matrix::Matrix4,
-    objects::Objects,
+    model_matrices::ModelMatrices,
     shadow_map_atlas::ShadowMapAtlasEntry,
     vertex::Vertex,
     vertex_buffer::VertexBuffer,
@@ -197,7 +197,7 @@ impl ShadowMaps {
 
 pub struct BindGroup0<'a> {
     pub lights: &'a GpuBuffer<Light>,
-    pub objects: &'a Objects,
+    pub model_matrices: &'a ModelMatrices,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -226,8 +226,8 @@ impl<'a> BindGroup0<'a> {
         );
 
         // @group(0) @binding(1)
-        // var<storage, read> objects: array<ObjectData>;
-        let objects = (
+        // var<storage, read> model_matrices: array<ModelMatrixData>;
+        let model_matrices = (
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX,
@@ -241,7 +241,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.objects.as_raw_buffer(),
+                    buffer: self.model_matrices.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -250,13 +250,13 @@ impl<'a> BindGroup0<'a> {
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("shadow_maps_bind_group_layout_0"),
-            entries: &[directional_light.0, objects.0],
+            entries: &[directional_light.0, model_matrices.0],
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("shadow_maps_bind_group_0"),
             layout: &layout,
-            entries: &[directional_light.1, objects.1],
+            entries: &[directional_light.1, model_matrices.1],
         });
 
         (layout, bind_group)

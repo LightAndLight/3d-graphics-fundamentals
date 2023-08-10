@@ -2,7 +2,6 @@ use wgpu::include_wgsl;
 
 use crate::{
     camera::CameraUniform, gpu_buffer::GpuBuffer, matrix::Matrix4, point::Point3, vector::Vec3,
-    vertex::Vertex,
 };
 
 pub struct DebugLightFrustum {

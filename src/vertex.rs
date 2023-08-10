@@ -1,10 +1,10 @@
-use crate::{material::MaterialId, objects::ObjectId, point::Point3, vector::Vec3};
+use crate::{material::MaterialId, model_matrices::ModelMatrixId, point::Point3, vector::Vec3};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: Point3,
-    pub object_id: ObjectId,
+    pub model_matrix_id: ModelMatrixId,
     pub normal: Vec3,
     pub material_id: MaterialId,
 }
@@ -20,7 +20,7 @@ impl Vertex {
                 offset: 0,
                 shader_location: 0,
             },
-            // object_id: ObjectId
+            // model_matrix_id: ModelMatrixId
             wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Uint32,
                 offset: std::mem::size_of::<Point3>() as u64,
@@ -30,14 +30,14 @@ impl Vertex {
             wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Float32x3,
                 offset: std::mem::size_of::<Point3>() as u64
-                    + std::mem::size_of::<ObjectId>() as u64,
+                    + std::mem::size_of::<ModelMatrixId>() as u64,
                 shader_location: 2,
             },
             // material_id: MaterialId
             wgpu::VertexAttribute {
                 format: wgpu::VertexFormat::Uint32,
                 offset: std::mem::size_of::<Point3>() as u64
-                    + std::mem::size_of::<ObjectId>() as u64
+                    + std::mem::size_of::<ModelMatrixId>() as u64
                     + std::mem::size_of::<Vec3>() as u64,
                 shader_location: 3,
             },

@@ -21,7 +21,7 @@ use it::{
     luminance::{self, Luminance},
     material::{Material, Materials},
     matrix::Matrix4,
-    objects::{ObjectData, Objects},
+    model_matrices::ModelMatrices,
     point::Point3,
     render_egui::RenderEgui,
     render_hdr::{self, RenderHdr},
@@ -148,7 +148,7 @@ fn main() {
     };
     surface.configure(&device, &surface_config);
 
-    let mut objects = Objects::new(&device, 1000);
+    let mut model_matrices = ModelMatrices::new(&device, 1000);
     let mut shadow_caster_scene_bounds: Aabb = Aabb {
         min: Point3::ZERO,
         max: Point3::ZERO,
@@ -215,48 +215,45 @@ fn main() {
 
     let mut vertex_buffer = VertexBuffer::new(&device, 100000);
     {
-        let object_id = objects.insert(
+        let model_matrix_id = model_matrices.insert(
             &queue,
-            ObjectData {
-                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                    x: -1.0,
-                    y: 0.0,
-                    z: 0.0,
-                })
-                .into(),
-            },
+            cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                x: -1.0,
+                y: 0.0,
+                z: 0.0,
+            })
+            .into(),
         );
-        vertex_buffer.insert_many(&queue, &shape::triangle(object_id, blue_material));
+        vertex_buffer.insert_many(&queue, &shape::triangle(model_matrix_id, blue_material));
     }
 
     {
-        let object_id = objects.insert(
+        let model_matrix_id = model_matrices.insert(
             &queue,
-            ObjectData {
-                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                    x: 1.0,
-                    y: 0.0,
-                    z: 0.0,
-                })
-                .into(),
-            },
+            cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            })
+            .into(),
         );
-        vertex_buffer.insert_many(&queue, &shape::square(object_id, green_material, 0.25));
+        vertex_buffer.insert_many(
+            &queue,
+            &shape::square(model_matrix_id, green_material, 0.25),
+        );
     }
 
     {
-        let object_id = objects.insert(
+        let model_matrix_id = model_matrices.insert(
             &queue,
-            ObjectData {
-                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                    x: 0.0,
-                    y: -2.5,
-                    z: 0.0,
-                })
-                .into(),
-            },
+            cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                x: 0.0,
+                y: -2.5,
+                z: 0.0,
+            })
+            .into(),
         );
-        vertex_buffer.insert_many(&queue, &shape::floor(object_id, grey_material, 100.0));
+        vertex_buffer.insert_many(&queue, &shape::floor(model_matrix_id, grey_material, 100.0));
     }
 
     for i in 0..10 {
@@ -280,9 +277,9 @@ fn main() {
             z: -4.0 - i as f32,
         })
         .into();
-        let object_id = objects.insert(&queue, ObjectData { transform });
+        let model_matrix_id = model_matrices.insert(&queue, transform);
         let radius = 0.5;
-        let vertices = shape::sphere(object_id, matte_grey_material, radius);
+        let vertices = shape::sphere(model_matrix_id, matte_grey_material, radius);
         vertex_buffer.insert_many(&queue, &vertices);
         let model_aabb = Aabb {
             min: Point3 {
@@ -302,7 +299,7 @@ fn main() {
 
     let teapot_aabb = load_model(
         &queue,
-        &mut objects,
+        &mut model_matrices,
         &mut vertex_buffer,
         "models/teapot.obj",
         cgmath::Matrix4::from_translation(cgmath::Vector3 {
@@ -317,7 +314,7 @@ fn main() {
 
     let monkey_aabb = load_model(
         &queue,
-        &mut objects,
+        &mut model_matrices,
         &mut vertex_buffer,
         "models/monkey.obj",
         cgmath::Matrix4::from_translation(cgmath::Vector3 {
@@ -497,16 +494,14 @@ fn main() {
             y: -2.0,
             z: -10.0,
         };
-        let point_light_id = objects.insert(
+        let point_light_id = model_matrices.insert(
             &queue,
-            ObjectData {
-                transform: cgmath::Matrix4::from_translation(cgmath::Vector3 {
-                    x: position.x,
-                    y: position.y,
-                    z: position.z,
-                })
-                .into(),
-            },
+            cgmath::Matrix4::from_translation(cgmath::Vector3 {
+                x: position.x,
+                y: position.y,
+                z: position.z,
+            })
+            .into(),
         );
 
         let shadow_projection = Matrix4::perspective(90.0, 1.0, 0.5, 15.0);
@@ -552,7 +547,7 @@ fn main() {
         point_lights_buffer.insert(
             &queue,
             PointLightGpu {
-                object_id: point_light_id,
+                model_matrix_id: point_light_id,
                 _padding0: [0, 0, 0],
                 color: Color {
                     r: 0.0,
@@ -892,7 +887,7 @@ fn main() {
         shadow_map_atlas.texture_format(),
         shadow_maps::BindGroup0 {
             lights: &shadow_map_lights_buffer,
-            objects: &objects,
+            model_matrices: &model_matrices,
         },
     );
 
@@ -930,7 +925,7 @@ fn main() {
         depth_texture_format,
         render_hdr::BindGroup0 {
             camera: &camera_buffer,
-            objects: &objects,
+            model_matrices: &model_matrices,
             display_normals: &display_normals_buffer,
             point_lights: &point_lights_buffer,
             directional_lights: &directional_lights_buffer,

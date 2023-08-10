@@ -1,14 +1,14 @@
 /*
-struct ObjectId{value: u32}
+struct ModelMatrixId{value: u32}
 
-I can't have `VertexInput.object_id : ObjectId` because `wgpu` reports a type mismatch.
-The `object_id` field needs to have type `u32` because that's the only type I can name
+I can't have `VertexInput.model_matrix_id : ModelMatrixId` because `wgpu` reports a type mismatch.
+The `model_matrix_id` field needs to have type `u32` because that's the only type I can name
 in the vertex buffer layout.
 
 I'd also like to write this but apparently I'm not allowed to pass the array as an argument.
 
-fn get_object(objects: array<ObjectData>, object_id: ObjectId) -> ObjectData {
-  return objects[object_id.value];
+fn get_model_matrix(model_matrices: array<ModelMatrixData>, model_matrix_id: ModelMatrixId) -> ModelMatrixData {
+  return model_matrices[model_matrix_id.value];
 }
 */
 
@@ -22,12 +22,8 @@ struct Camera{
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
-struct ObjectData{
-  transform: mat4x4<f32>
-}
-
 @group(0) @binding(1)
-var<storage, read> objects: array<ObjectData>;
+var<storage, read> model_matrices: array<mat4x4<f32>>;
 
 @group(0) @binding(2)
 var<uniform> display_normals: u32; // Apparently booleans aren't host-mappable?
@@ -42,7 +38,7 @@ struct PointLightShadowMapLightIds{
 }
 
 struct PointLight{
-  object_id: u32,
+  model_matrix_id: u32,
   color: vec4<f32>,
   luminous_power: f32,
   shadow_map_light_ids: PointLightShadowMapLightIds
@@ -116,7 +112,7 @@ fn srgb_to_linear(srgb: vec4<f32>) -> vec4<f32> {
 
 struct VertexInput{
   @location(0) position: vec3<f32>,
-  @location(1) object_id: u32,
+  @location(1) model_matrix_id: u32,
   @location(2) normal: vec3<f32>,
   @location(3) material_id: u32
 }
@@ -125,7 +121,7 @@ struct VertexInput{
 fn vertex_main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
 
-  let world_position = objects[input.object_id].transform * vec4<f32>(input.position, 1.0);
+  let world_position = model_matrices[input.model_matrix_id] * vec4<f32>(input.position, 1.0);
   output.world_position = world_position.xyz / world_position.w;
   output.position = camera.view_proj * world_position;
 
@@ -283,7 +279,7 @@ fn fragment_main(input: VertexOutput) -> FragmentOutput {
       let point_light = point_lights[i];
 
       // TODO: don't recalculate this for every fragment.
-      let point_light_position: vec4<f32> = objects[point_light.object_id].transform * vec4<f32>(0.0, 0.0, 0.0, 1.0);
+      let point_light_position: vec4<f32> = model_matrices[point_light.model_matrix_id] * vec4<f32>(0.0, 0.0, 0.0, 1.0);
 
       // fragment to light
       let light_direction: vec3<f32> = normalize((point_light_position.xyz / point_light_position.w) - input.world_position); 

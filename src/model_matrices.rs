@@ -2,32 +2,26 @@ use crate::{gpu_buffer::GpuBuffer, matrix::Matrix4};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ObjectId(pub u32);
+pub struct ModelMatrixId(pub u32);
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ObjectData {
-    pub transform: Matrix4,
-}
+pub struct ModelMatrices(GpuBuffer<Matrix4>);
 
-pub struct Objects(GpuBuffer<ObjectData>);
-
-impl Objects {
+impl ModelMatrices {
     pub fn new(device: &wgpu::Device, capacity: u32) -> Self {
-        Objects(GpuBuffer::new(
+        ModelMatrices(GpuBuffer::new(
             device,
-            Some("objects"),
+            Some("model_matrices"),
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             capacity,
         ))
     }
 
-    pub fn insert(&mut self, queue: &wgpu::Queue, data: ObjectData) -> ObjectId {
+    pub fn insert(&mut self, queue: &wgpu::Queue, data: Matrix4) -> ModelMatrixId {
         let index = self.0.insert(queue, data);
-        ObjectId(index)
+        ModelMatrixId(index)
     }
 
-    pub fn remove(&mut self, _object_id: ObjectId) {
+    pub fn remove(&mut self, _object_id: ModelMatrixId) {
         todo!()
     }
 

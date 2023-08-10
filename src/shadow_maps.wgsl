@@ -9,27 +9,23 @@ struct Light{
 @group(0) @binding(0)
 var<uniform> light: Light;
 
-struct ObjectData{
-  transform: mat4x4<f32>
-}
-
 @group(0) @binding(1)
-var<storage, read> objects: array<ObjectData>;
+var<storage, read> model_matrices: array<mat4x4<f32>>;
 
 struct VertexInput{
   @location(0) position: vec3<f32>,
-  @location(1) object_id: u32,
+  @location(1) model_matrix_id: u32,
   @location(2) normal: vec3<f32>,
   @location(3) material_id: u32
 }
 
 @vertex
 fn vertex_main(input: VertexInput) -> @builtin(position) vec4<f32> {
-  let object = objects[input.object_id];
+  let model_matrix = model_matrices[input.model_matrix_id];
   return
     light.shadow_projection *
     light.shadow_view *
-    object.transform *
+    model_matrix *
     vec4<f32>(input.position, 1.0);
 }
 

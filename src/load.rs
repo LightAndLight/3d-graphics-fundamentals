@@ -2,7 +2,7 @@ use crate::{
     aabb::Aabb,
     material::MaterialId,
     matrix::Matrix4,
-    objects::{ObjectData, ObjectId, Objects},
+    model_matrices::{ModelMatrices, ModelMatrixId},
     point::Point3,
     vector::Vec3,
     vertex::Vertex,
@@ -11,7 +11,7 @@ use crate::{
 
 pub fn load_model(
     queue: &wgpu::Queue,
-    objects: &mut Objects,
+    model_matrices: &mut ModelMatrices,
     vertex_buffer: &mut VertexBuffer,
     file_name: &str,
     transform: Matrix4,
@@ -28,14 +28,14 @@ pub fn load_model(
 
     let model = &models[0];
 
-    let object_id = objects.insert(queue, ObjectData { transform });
+    let model_matrix_id = model_matrices.insert(queue, transform);
     let vertices = {
         let mut vertices = Vec::with_capacity(model.mesh.indices.len());
 
         if model.mesh.face_arities.is_empty() {
             // all faces are triangles
             if model.mesh.normals.is_empty() {
-                extract_and_normalise(object_id, material_id, model, &mut vertices);
+                extract_and_normalise(model_matrix_id, material_id, model, &mut vertices);
             } else {
                 /*
                 assert!(
@@ -52,7 +52,7 @@ pub fn load_model(
                             y: model.mesh.positions[3 * index + 1],
                             z: model.mesh.positions[3 * index + 2],
                         },
-                        object_id,
+                        model_matrix_id,
                         normal: Vec3 {
                             x: model.mesh.normals[3 * index],
                             y: model.mesh.normals[3 * index + 1],
@@ -87,7 +87,7 @@ enum NormalStyle {
 const NORMAL_STYLE: NormalStyle = NormalStyle::Vertex;
 
 fn extract_and_normalise(
-    object_id: ObjectId,
+    model_matrix_id: ModelMatrixId,
     material_id: MaterialId,
     model: &tobj::Model,
     vertices: &mut Vec<Vertex>,
@@ -140,21 +140,21 @@ fn extract_and_normalise(
 
         vertices.push(Vertex {
             position: a,
-            object_id,
+            model_matrix_id,
             normal,
             material_id,
         });
 
         vertices.push(Vertex {
             position: b,
-            object_id,
+            model_matrix_id,
             normal,
             material_id,
         });
 
         vertices.push(Vertex {
             position: c,
-            object_id,
+            model_matrix_id,
             normal,
             material_id,
         });

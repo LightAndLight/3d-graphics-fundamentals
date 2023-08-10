@@ -10,7 +10,7 @@ pub mod load;
 pub mod luminance;
 pub mod material;
 pub mod matrix;
-pub mod objects;
+pub mod model_matrices;
 pub mod point;
 pub mod render_egui;
 pub mod render_hdr;

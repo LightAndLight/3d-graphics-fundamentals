@@ -3,7 +3,7 @@ use crate::{
     gpu_buffer::GpuBuffer,
     light::{DirectionalLightGpu, PointLightGpu},
     material::Materials,
-    objects::Objects,
+    model_matrices::ModelMatrices,
     shadow_maps,
     vertex::Vertex,
     vertex_buffer::VertexBuffer,
@@ -74,11 +74,11 @@ impl RenderHdr {
                 <https://www.reddit.com/r/wgpu/comments/tilvas/is_your_wgpu_world_left_or_right_handed/iykwrp0/>
 
                 The Z direction is implied by the projection matrix, and the depth test needs to bet
-                configured to match. If the projection matrix makes objects with high Z smaller (left-handed coordinates / "+Z in"),
+                configured to match. If the projection matrix makes model_matrices with high Z smaller (left-handed coordinates / "+Z in"),
                 then the closest fragment is the one with the smallest Z, which means we need to
                 clear to 1.0 (max Z / far plane) and use the `Less` comparison.
 
-                Conversely, if the projection matrix made objects with low Z smaller (right-handed / "+Z out"),
+                Conversely, if the projection matrix made model_matrices with low Z smaller (right-handed / "+Z out"),
                 then we'd need to clear to 0.0 (min Z / far plane) and use the `Greater` comparison.
                 */
                 depth_compare: wgpu::CompareFunction::Less,
@@ -161,7 +161,7 @@ impl RenderHdr {
 
 pub struct BindGroup0<'a> {
     pub camera: &'a GpuBuffer<CameraUniform>,
-    pub objects: &'a Objects,
+    pub model_matrices: &'a ModelMatrices,
     pub display_normals: &'a wgpu::Buffer,
     pub point_lights: &'a GpuBuffer<PointLightGpu>,
     pub directional_lights: &'a GpuBuffer<DirectionalLightGpu>,
@@ -199,8 +199,8 @@ impl<'a> BindGroup0<'a> {
         );
 
         // @group(0) @binding(1)
-        // var<storage, read> objects: array<ObjectData>;
-        let objects = (
+        // var<storage, read> model_matrices: array<ObjectData>;
+        let model_matrices = (
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
@@ -214,7 +214,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.objects.as_raw_buffer(),
+                    buffer: self.model_matrices.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -408,7 +408,7 @@ impl<'a> BindGroup0<'a> {
             label: Some("render_hdr_bind_group_layout_0"),
             entries: &[
                 camera.0,
-                objects.0,
+                model_matrices.0,
                 display_normals.0,
                 point_lights.0,
                 directional_lights.0,
@@ -426,7 +426,7 @@ impl<'a> BindGroup0<'a> {
             layout: &layout,
             entries: &[
                 camera.1,
-                objects.1,
+                model_matrices.1,
                 display_normals.1,
                 point_lights.1,
                 directional_lights.1,

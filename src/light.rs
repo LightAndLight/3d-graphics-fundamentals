@@ -1,9 +1,9 @@
-use crate::{color::Color, objects::ObjectId, shadow_map_atlas, vector::Vec3};
+use crate::{color::Color, model_matrices::ModelMatrixId, shadow_map_atlas, vector::Vec3};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct PointLightGpu {
-    pub object_id: ObjectId,
+    pub model_matrix_id: ModelMatrixId,
 
     /**
     See:

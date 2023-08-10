@@ -1,6 +1,9 @@
-use crate::{material::MaterialId, objects::ObjectId, point::Point3, vector::Vec3, vertex::Vertex};
+use crate::{
+    material::MaterialId, model_matrices::ModelMatrixId, point::Point3, vector::Vec3,
+    vertex::Vertex,
+};
 
-pub fn triangle(object_id: ObjectId, material_id: MaterialId) -> Vec<Vertex> {
+pub fn triangle(model_matrix_id: ModelMatrixId, material_id: MaterialId) -> Vec<Vertex> {
     vec![
         Vertex {
             position: Point3 {
@@ -8,7 +11,7 @@ pub fn triangle(object_id: ObjectId, material_id: MaterialId) -> Vec<Vertex> {
                 y: -0.5,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -22,7 +25,7 @@ pub fn triangle(object_id: ObjectId, material_id: MaterialId) -> Vec<Vertex> {
                 y: 0.5,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -36,7 +39,7 @@ pub fn triangle(object_id: ObjectId, material_id: MaterialId) -> Vec<Vertex> {
                 y: -0.5,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -47,7 +50,7 @@ pub fn triangle(object_id: ObjectId, material_id: MaterialId) -> Vec<Vertex> {
     ]
 }
 
-pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
+pub fn square(model_matrix_id: ModelMatrixId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
     let side_over_2 = side / 2.0;
     vec![
         Vertex {
@@ -56,7 +59,7 @@ pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ve
                 y: side_over_2,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -70,7 +73,7 @@ pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ve
                 y: side_over_2,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -84,7 +87,7 @@ pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ve
                 y: -side_over_2,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -98,7 +101,7 @@ pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ve
                 y: side_over_2,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -112,7 +115,7 @@ pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ve
                 y: -side_over_2,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -126,7 +129,7 @@ pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ve
                 y: -side_over_2,
                 z: 0.0,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 0.0,
@@ -137,7 +140,7 @@ pub fn square(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ve
     ]
 }
 
-pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
+pub fn floor(model_matrix_id: ModelMatrixId, material_id: MaterialId, side: f32) -> Vec<Vertex> {
     let side_over_2 = side / 2.0;
     vec![
         Vertex {
@@ -146,7 +149,7 @@ pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ver
                 y: 0.0,
                 z: -side_over_2,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 1.0,
@@ -160,7 +163,7 @@ pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ver
                 y: 0.0,
                 z: side_over_2,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 1.0,
@@ -174,7 +177,7 @@ pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ver
                 y: 0.0,
                 z: side_over_2,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 1.0,
@@ -188,7 +191,7 @@ pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ver
                 y: 0.0,
                 z: -side_over_2,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 1.0,
@@ -202,7 +205,7 @@ pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ver
                 y: 0.0,
                 z: -side_over_2,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 1.0,
@@ -216,7 +219,7 @@ pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ver
                 y: 0.0,
                 z: side_over_2,
             },
-            object_id,
+            model_matrix_id,
             normal: Vec3 {
                 x: 0.0,
                 y: 1.0,
@@ -227,7 +230,7 @@ pub fn floor(object_id: ObjectId, material_id: MaterialId, side: f32) -> Vec<Ver
     ]
 }
 
-pub fn sphere(object_id: ObjectId, material_id: MaterialId, radius: f32) -> Vec<Vertex> {
+pub fn sphere(model_matrix_id: ModelMatrixId, material_id: MaterialId, radius: f32) -> Vec<Vertex> {
     let mut vertices = Vec::new();
 
     // number of "longitude" lines
@@ -276,19 +279,19 @@ pub fn sphere(object_id: ObjectId, material_id: MaterialId, radius: f32) -> Vec<
 
         vertices.push(Vertex {
             position: top,
-            object_id,
+            model_matrix_id,
             normal: Vec3::Y,
             material_id,
         });
         vertices.push(Vertex {
             position: bottom_left,
-            object_id,
+            model_matrix_id,
             normal: Vec3::from(bottom_left).normalize(),
             material_id,
         });
         vertices.push(Vertex {
             position: bottom_right,
-            object_id,
+            model_matrix_id,
             normal: Vec3::from(bottom_right).normalize(),
             material_id,
         });
@@ -345,21 +348,21 @@ pub fn sphere(object_id: ObjectId, material_id: MaterialId, radius: f32) -> Vec<
             // TR
             vertices.push(Vertex {
                 position: top_right,
-                object_id,
+                model_matrix_id,
                 normal: Vec3::from(top_right).normalize(),
                 material_id,
             });
             // BL
             vertices.push(Vertex {
                 position: bottom_left,
-                object_id,
+                model_matrix_id,
                 normal: Vec3::from(bottom_left).normalize(),
                 material_id,
             });
             // BR
             vertices.push(Vertex {
                 position: bottom_right,
-                object_id,
+                model_matrix_id,
                 normal: Vec3::from(bottom_right).normalize(),
                 material_id,
             });
@@ -367,21 +370,21 @@ pub fn sphere(object_id: ObjectId, material_id: MaterialId, radius: f32) -> Vec<
             // TR
             vertices.push(Vertex {
                 position: top_right,
-                object_id,
+                model_matrix_id,
                 normal: Vec3::from(top_right).normalize(),
                 material_id,
             });
             // TL
             vertices.push(Vertex {
                 position: top_left,
-                object_id,
+                model_matrix_id,
                 normal: Vec3::from(top_left).normalize(),
                 material_id,
             });
             // BL
             vertices.push(Vertex {
                 position: bottom_left,
-                object_id,
+                model_matrix_id,
                 normal: Vec3::from(bottom_left).normalize(),
                 material_id,
             });
@@ -421,19 +424,19 @@ pub fn sphere(object_id: ObjectId, material_id: MaterialId, radius: f32) -> Vec<
 
         vertices.push(Vertex {
             position: top_right,
-            object_id,
+            model_matrix_id,
             normal: Vec3::from(top_right).normalize(),
             material_id,
         });
         vertices.push(Vertex {
             position: top_left,
-            object_id,
+            model_matrix_id,
             normal: Vec3::from(top_left).normalize(),
             material_id,
         });
         vertices.push(Vertex {
             position: bottom,
-            object_id,
+            model_matrix_id,
             normal: -Vec3::Y,
             material_id,
         });

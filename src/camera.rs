@@ -117,14 +117,14 @@ impl Camera {
         let clip_to_world = self.clip_coordinates_matrix().inverse();
 
         Cuboid {
-            near_top_left: Point3::from(clip_to_world * CLIP_NEAR_TOP_LEFT) + self.eye,
-            near_top_right: Point3::from(clip_to_world * CLIP_NEAR_TOP_RIGHT) + self.eye,
-            near_bottom_left: Point3::from(clip_to_world * CLIP_NEAR_BOTTOM_LEFT) + self.eye,
-            near_bottom_right: Point3::from(clip_to_world * CLIP_NEAR_BOTTOM_RIGHT) + self.eye,
-            far_top_left: Point3::from(clip_to_world * CLIP_FAR_TOP_LEFT) + self.eye,
-            far_top_right: Point3::from(clip_to_world * CLIP_FAR_TOP_RIGHT) + self.eye,
-            far_bottom_left: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_LEFT) + self.eye,
-            far_bottom_right: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_RIGHT) + self.eye,
+            near_top_left: Point3::from(clip_to_world * CLIP_NEAR_TOP_LEFT),
+            near_top_right: Point3::from(clip_to_world * CLIP_NEAR_TOP_RIGHT),
+            near_bottom_left: Point3::from(clip_to_world * CLIP_NEAR_BOTTOM_LEFT),
+            near_bottom_right: Point3::from(clip_to_world * CLIP_NEAR_BOTTOM_RIGHT),
+            far_top_left: Point3::from(clip_to_world * CLIP_FAR_TOP_LEFT),
+            far_top_right: Point3::from(clip_to_world * CLIP_FAR_TOP_RIGHT),
+            far_bottom_left: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_LEFT),
+            far_bottom_right: Point3::from(clip_to_world * CLIP_FAR_BOTTOM_RIGHT),
         }
     }
 

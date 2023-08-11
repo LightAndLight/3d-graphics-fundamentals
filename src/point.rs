@@ -83,6 +83,30 @@ impl From<Point3> for cgmath::Point3<f32> {
     }
 }
 
+impl std::ops::Div<f32> for Point3 {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        Self {
+            x: self.x / rhs,
+            y: self.y / rhs,
+            z: self.z / rhs,
+        }
+    }
+}
+
+impl std::ops::Neg for Point3 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
+    }
+}
+
 impl From<Point4> for Point3 {
     fn from(value: Point4) -> Self {
         Self {

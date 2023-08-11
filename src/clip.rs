@@ -73,6 +73,7 @@ fn test_distance_to_point_1() {
     );
 }
 
+#[derive(Debug)]
 pub struct Triangle(pub Point3, pub Point3, pub Point3);
 
 impl IntoIterator for Triangle {
@@ -154,4 +155,26 @@ pub fn clip_triangle(plane: &Plane, triangle: &Triangle) -> ClippedTriangle {
         3 => ClippedTriangle::Accept,
         _ => unreachable!(),
     }
+}
+
+pub fn clip_triangles(plane: Plane, triangles: Vec<Triangle>) -> Vec<Triangle> {
+    triangles
+        .into_iter()
+        .map(move |triangle| (clip_triangle(&plane, &triangle), triangle))
+        .fold(Vec::new(), |mut triangles, (clip_result, triangle)| {
+            match clip_result {
+                ClippedTriangle::Accept => {
+                    triangles.push(triangle);
+                }
+                ClippedTriangle::Reject => {}
+                ClippedTriangle::Split1(triangle) => {
+                    triangles.push(triangle);
+                }
+                ClippedTriangle::Split2(triangle1, triangle2) => {
+                    triangles.push(triangle1);
+                    triangles.push(triangle2);
+                }
+            };
+            triangles
+        })
 }

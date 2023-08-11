@@ -11,6 +11,7 @@ use it::{
     camera::{self, Camera, CameraUniform},
     clip,
     color::Color,
+    cuboid::Cuboid,
     gpu_buffer::GpuBuffer,
     light::{
         DirectionalLight, DirectionalLightGpu, PointLight, PointLightGpu, PointLightShadowMapFace,
@@ -290,7 +291,8 @@ fn main() {
             },
         };
 
-        shadow_caster_scene_bounds = shadow_caster_scene_bounds.union(transform * model_aabb);
+        shadow_caster_scene_bounds =
+            shadow_caster_scene_bounds.union(model_aabb.transform(transform));
     }
 
     let teapot_aabb = load_model(
@@ -567,10 +569,11 @@ fn main() {
     fn fit_orthographic_projection_to_camera(
         scene_bounds: &Aabb,
         camera: &Camera,
-        shadow_view: Matrix4,
+        direction: Vec3,
     ) -> Aabb {
         let camera_frustum_world_space = camera.frustum_world_space();
-        let camera_frustum_light_space = shadow_view * camera_frustum_world_space;
+        let camera_frustum_light_space =
+            Matrix4::look_to(Point3::ZERO, direction, Vec3::Y) * camera_frustum_world_space;
 
         let camera_shadow_points = [
             camera_frustum_light_space.near_top_left,
@@ -633,75 +636,17 @@ fn main() {
             },
         );
 
-        fn clip_triangles_against_plane(
-            plane: clip::Plane,
-            triangles: Vec<clip::Triangle>,
-        ) -> Vec<clip::Triangle> {
-            triangles
-                .into_iter()
-                .map(move |triangle| (clip::clip_triangle(&plane, &triangle), triangle))
-                .fold(Vec::new(), |mut triangles, (clip_result, triangle)| {
-                    match clip_result {
-                        clip::ClippedTriangle::Accept => {
-                            triangles.push(triangle);
-                        }
-                        clip::ClippedTriangle::Reject => {}
-                        clip::ClippedTriangle::Split1(triangle) => {
-                            triangles.push(triangle);
-                        }
-                        clip::ClippedTriangle::Split2(triangle1, triangle2) => {
-                            triangles.push(triangle1);
-                            triangles.push(triangle2);
-                        }
-                    };
-                    triangles
-                })
-        }
-
-        let scene_bounds_light_space = shadow_view * scene_bounds;
-
         let triangles: Vec<clip::Triangle> = {
-            let near_top_left = Point3 {
-                x: scene_bounds_light_space.min.x,
-                y: scene_bounds_light_space.max.y,
-                z: scene_bounds_light_space.max.z,
-            };
-            let near_top_right = Point3 {
-                x: scene_bounds_light_space.max.x,
-                y: scene_bounds_light_space.max.y,
-                z: scene_bounds_light_space.max.z,
-            };
-            let near_bottom_left = Point3 {
-                x: scene_bounds_light_space.min.x,
-                y: scene_bounds_light_space.min.y,
-                z: scene_bounds_light_space.max.z,
-            };
-            let near_bottom_right = Point3 {
-                x: scene_bounds_light_space.max.x,
-                y: scene_bounds_light_space.min.y,
-                z: scene_bounds_light_space.max.z,
-            };
-
-            let far_top_left = Point3 {
-                x: scene_bounds_light_space.min.x,
-                y: scene_bounds_light_space.max.y,
-                z: scene_bounds_light_space.min.z,
-            };
-            let far_top_right = Point3 {
-                x: scene_bounds_light_space.max.x,
-                y: scene_bounds_light_space.max.y,
-                z: scene_bounds_light_space.min.z,
-            };
-            let far_bottom_left = Point3 {
-                x: scene_bounds_light_space.min.x,
-                y: scene_bounds_light_space.min.y,
-                z: scene_bounds_light_space.min.z,
-            };
-            let far_bottom_right = Point3 {
-                x: scene_bounds_light_space.max.x,
-                y: scene_bounds_light_space.min.y,
-                z: scene_bounds_light_space.min.z,
-            };
+            let Cuboid {
+                near_top_left,
+                near_top_right,
+                near_bottom_left,
+                near_bottom_right,
+                far_top_left,
+                far_top_right,
+                far_bottom_left,
+                far_bottom_right,
+            } = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y) * scene_bounds.as_cuboid();
 
             vec![
                 // Near face
@@ -725,13 +670,13 @@ fn main() {
             ]
         };
         let clipped_triangles: Vec<clip::Triangle> =
-            clip_triangles_against_plane(left_clipping_plane, triangles);
+            clip::clip_triangles(left_clipping_plane, triangles);
         let clipped_triangles: Vec<clip::Triangle> =
-            clip_triangles_against_plane(right_clipping_plane, clipped_triangles);
+            clip::clip_triangles(right_clipping_plane, clipped_triangles);
         let clipped_triangles: Vec<clip::Triangle> =
-            clip_triangles_against_plane(bottom_clipping_plane, clipped_triangles);
+            clip::clip_triangles(bottom_clipping_plane, clipped_triangles);
         let clipped_triangles: Vec<clip::Triangle> =
-            clip_triangles_against_plane(top_clipping_plane, clipped_triangles);
+            clip::clip_triangles(top_clipping_plane, clipped_triangles);
 
         let (near, far) = clipped_triangles.into_iter().fold(
             (f32::NEG_INFINITY, f32::INFINITY),
@@ -742,7 +687,7 @@ fn main() {
             },
         );
 
-        dbg!(Aabb {
+        Aabb {
             min: Point3 {
                 x: left,
                 y: bottom,
@@ -753,7 +698,7 @@ fn main() {
                 y: top,
                 z: near,
             },
-        })
+        }
     }
 
     let mut directional_lights_buffer: GpuBuffer<DirectionalLightGpu> = GpuBuffer::new(
@@ -766,10 +711,10 @@ fn main() {
 
     struct DirectionalLightInfo {
         shadow_map_id: u32,
-        shadow_view: Matrix4,
         shadow_view_inverse: Matrix4,
         shadow_map_atlas_position: Vec2,
         shadow_map_atlas_size: f32,
+        direction: Vec3,
         aabb: Aabb,
     }
     let directional_light_info = {
@@ -781,14 +726,12 @@ fn main() {
         let shadow_map_atlas_entry = shadow_map_atlas.allocate();
         let position = shadow_map_atlas_entry.position();
         let size = shadow_map_atlas_entry.size();
-        let shadow_view = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y);
 
-        let aabb = fit_orthographic_projection_to_camera(
-            &shadow_caster_scene_bounds,
-            &camera,
-            shadow_view,
-        );
+        let aabb =
+            fit_orthographic_projection_to_camera(&shadow_caster_scene_bounds, &camera, direction);
         debug_assert!(aabb.valid(), "invalid aabb: {:?}", aabb);
+
+        let shadow_view = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y);
 
         let id = shadow_map_lights_buffer.insert(
             &queue,
@@ -825,10 +768,10 @@ fn main() {
 
         DirectionalLightInfo {
             shadow_map_id: id,
-            shadow_view,
             shadow_view_inverse: shadow_view.inverse(),
             shadow_map_atlas_position: position,
             shadow_map_atlas_size: size,
+            direction,
             aabb,
         }
     };
@@ -1260,13 +1203,19 @@ fn main() {
                         let aabb = fit_orthographic_projection_to_camera(
                             &shadow_caster_scene_bounds,
                             &camera,
-                            directional_light_info.shadow_view,
+                            directional_light_info.direction,
+                        );
+
+                        let shadow_view = Matrix4::look_to(
+                            Point3::ZERO,
+                            directional_light_info.direction,
+                            Vec3::Y,
                         );
                         shadow_map_lights_buffer.update(
                             &queue,
                             directional_light_info.shadow_map_id,
                             shadow_maps::Light {
-                                shadow_view: directional_light_info.shadow_view,
+                                shadow_view,
                                 shadow_projection: Matrix4::ortho(
                                     aabb.min.x,
                                     aabb.max.x,
@@ -1284,6 +1233,12 @@ fn main() {
                                 ],
                                 _padding: [0, 0, 0, 0, 0, 0, 0],
                             },
+                        );
+
+                        model_matrices.update(
+                            &queue,
+                            directional_light_frustum_model_matrix_id,
+                            shadow_view.inverse(),
                         );
 
                         for (index, (from, to)) in

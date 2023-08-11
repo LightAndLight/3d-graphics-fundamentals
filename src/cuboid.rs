@@ -31,6 +31,18 @@ impl Cuboid {
             (self.near_bottom_left, self.far_bottom_left),
         ]
     }
+
+    pub fn center(&self) -> Point3 {
+        (self.near_bottom_left
+            + self.near_bottom_right
+            + self.near_top_left
+            + self.near_top_right
+            + self.far_bottom_left
+            + self.far_bottom_right
+            + self.far_top_left
+            + self.far_top_right)
+            / 8.0
+    }
 }
 
 impl std::ops::Mul<Cuboid> for Matrix4 {

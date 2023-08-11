@@ -74,7 +74,7 @@ pub fn load_model(
         aabb.union(Aabb::point(vertex.position))
     });
 
-    transform * model_aabb
+    model_aabb.transform(transform)
 }
 
 enum NormalStyle {

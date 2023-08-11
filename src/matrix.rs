@@ -38,10 +38,26 @@ Taken from <https://sotrh.github.io/learn-wgpu/beginner/tutorial6-uniforms/#a-pe
 */
 #[rustfmt::skip]
 const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 0.5, 0.0,
-    0.0, 0.0, 0.5, 1.0,
+    // v0
+    1.0, 
+    0.0, 
+    0.0, 
+    0.0,
+    // c1
+    0.0, 
+    1.0, 
+    0.0, 
+    0.0,
+    // c2
+    0.0, 
+    0.0, 
+    0.5, 
+    0.0,
+    // c3
+    0.0, 
+    0.0, 
+    0.5, 
+    1.0,
 );
 
 impl Matrix4 {

@@ -23,7 +23,7 @@
 * Shadow mapping
   * [x] Basic shadow map for directional lights
   * [x] Omnidirectional shadow mapping (point lights)
-  * [ ] Light frustum fitting
+  * [x] Light frustum fitting
 * Environment mapping / image-based lighting
   * [x] HDRI skybox
 * Use GPU-driven techniques as much as possible

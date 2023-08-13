@@ -572,45 +572,30 @@ fn main() {
         camera: &Camera,
         direction: Vec3,
     ) -> Aabb {
-        let camera_frustum_world_space = camera.frustum_world_space();
-        let camera_frustum_light_space =
-            Matrix4::look_to(Point3::ZERO, direction, Vec3::Y) * camera_frustum_world_space;
+        let camera_frustum_world_space_bounding_sphere =
+            camera.frustum_world_space().bounding_sphere();
 
-        let camera_frustum_light_space_aabb = camera_frustum_light_space.aabb();
-        let camera_frustum_light_space_aabb_max_width =
-            camera_frustum_light_space_aabb.max.x - camera_frustum_light_space_aabb.min.x;
-        let camera_frustum_light_space_aabb_max_height =
-            camera_frustum_light_space_aabb.max.y - camera_frustum_light_space_aabb.min.y;
-        let shadow_texel_x = camera_frustum_light_space_aabb_max_width / shadow_map_size[0];
-        let shadow_texel_y = camera_frustum_light_space_aabb_max_height / shadow_map_size[1];
+        let shadow_texel_x =
+            2.0 * camera_frustum_world_space_bounding_sphere.radius / shadow_map_size[0];
+        let shadow_texel_y =
+            2.0 * camera_frustum_world_space_bounding_sphere.radius / shadow_map_size[1];
 
-        let camera_shadow_points = [
-            camera_frustum_light_space.near_top_left,
-            camera_frustum_light_space.near_top_right,
-            camera_frustum_light_space.near_bottom_left,
-            camera_frustum_light_space.near_bottom_right,
-            camera_frustum_light_space.far_top_left,
-            camera_frustum_light_space.far_top_right,
-            camera_frustum_light_space.far_bottom_left,
-            camera_frustum_light_space.far_bottom_right,
-        ];
-
-        let (left, right, bottom, top) = camera_shadow_points.iter().fold(
-            (
-                f32::INFINITY,
-                f32::NEG_INFINITY,
-                f32::INFINITY,
-                f32::NEG_INFINITY,
-            ),
-            |(left, right, bottom, top), point| {
-                (
-                    left.min(point.x),
-                    right.max(point.x),
-                    bottom.min(point.y),
-                    top.max(point.y),
-                )
-            },
+        let camera_frustum_light_space_bounding_sphere_center = Point3::from(
+            Matrix4::look_to(Point3::ZERO, direction, Vec3::Y)
+                * camera_frustum_world_space_bounding_sphere
+                    .center
+                    .with_w(1.0),
         );
+
+        let left = camera_frustum_light_space_bounding_sphere_center.x
+            - camera_frustum_world_space_bounding_sphere.radius;
+        let right = camera_frustum_light_space_bounding_sphere_center.x
+            + camera_frustum_world_space_bounding_sphere.radius;
+        let bottom = camera_frustum_light_space_bounding_sphere_center.y
+            - camera_frustum_world_space_bounding_sphere.radius;
+        let top = camera_frustum_light_space_bounding_sphere_center.y
+            + camera_frustum_world_space_bounding_sphere.radius;
+
         let left = (left / shadow_texel_x).floor() * shadow_texel_x;
         let right = (right / shadow_texel_x).floor() * shadow_texel_x;
         let bottom = (bottom / shadow_texel_y).floor() * shadow_texel_y;

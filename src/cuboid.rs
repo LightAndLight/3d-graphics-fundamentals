@@ -1,4 +1,4 @@
-use crate::{aabb::Aabb, matrix::Matrix4, point::Point3};
+use crate::{aabb::Aabb, matrix::Matrix4, point::Point3, sphere::Sphere};
 
 pub struct Cuboid {
     pub near_top_left: Point3,
@@ -44,8 +44,8 @@ impl Cuboid {
             / 8.0
     }
 
-    pub fn aabb(&self) -> Aabb {
-        let vertices = [
+    pub fn vertices(&self) -> [Point3; 8] {
+        [
             self.far_bottom_left,
             self.far_bottom_right,
             self.far_top_left,
@@ -54,9 +54,11 @@ impl Cuboid {
             self.near_bottom_right,
             self.near_top_left,
             self.near_top_right,
-        ];
+        ]
+    }
 
-        let (min_x, max_x, min_y, max_y, min_z, max_z) = vertices.into_iter().fold(
+    pub fn aabb(&self) -> Aabb {
+        let (min_x, max_x, min_y, max_y, min_z, max_z) = self.vertices().into_iter().fold(
             (
                 f32::INFINITY,
                 f32::NEG_INFINITY,
@@ -89,6 +91,18 @@ impl Cuboid {
                 z: max_z,
             },
         }
+    }
+
+    pub fn bounding_sphere(&self) -> Sphere {
+        let vertices = self.vertices();
+        let center: Point3 = vertices
+            .iter()
+            .fold(Point3::ZERO, |center, point| center + *point)
+            / 8.0;
+        let radius: f32 = vertices
+            .into_iter()
+            .fold(0.0, |radius, point| radius.max((point - center).length()));
+        Sphere { center, radius }
     }
 }
 

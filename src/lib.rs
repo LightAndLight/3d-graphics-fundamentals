@@ -18,6 +18,7 @@ pub mod render_wireframe;
 pub mod shadow_map_atlas;
 pub mod shadow_maps;
 pub mod shape;
+pub mod sphere;
 pub mod tone_mapping;
 pub mod vector;
 pub mod vertex;

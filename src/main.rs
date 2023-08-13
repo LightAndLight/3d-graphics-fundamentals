@@ -45,6 +45,7 @@ struct Fps {
     frame_times: Vec<Duration>,
     next_frame_time_index: usize,
     instant: Instant,
+    avg_millis_per_frame: f32,
 }
 
 impl Fps {
@@ -57,6 +58,7 @@ impl Fps {
             frame_times,
             next_frame_time_index,
             instant,
+            avg_millis_per_frame: f32::NAN,
         }
     }
 
@@ -69,12 +71,16 @@ impl Fps {
         if self.next_frame_time_index + 1 == self.frame_times.len() {
             self.next_frame_time_index = 0;
 
-            let avg_millis_per_frame = self.frame_times.iter().sum::<Duration>().as_millis() as f32
+            self.avg_millis_per_frame = self.frame_times.iter().sum::<Duration>().as_millis()
+                as f32
                 / self.frame_times.len() as f32;
-            log::debug!("fps: {:?}", 1000.0 / avg_millis_per_frame)
         } else {
             self.next_frame_time_index += 1;
         }
+    }
+
+    fn avg_fps(&self) -> f32 {
+        1000.0 / self.avg_millis_per_frame
     }
 }
 
@@ -1359,6 +1365,16 @@ fn main() {
                         &mut command_encoder,
                         &surface_texture_view,
                         &mut |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("Average frame duration (ms): ");
+                                ui.label(fps.avg_millis_per_frame.to_string());
+                            });
+
+                            ui.horizontal(|ui| {
+                                ui.label("FPS: ");
+                                ui.label(fps.avg_fps().round().to_string());
+                            });
+
                             if ui
                                 .checkbox(&mut display_normals, "Display normals")
                                 .changed()

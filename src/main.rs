@@ -576,7 +576,7 @@ fn main() {
         shadow_map_size: [f32; 2],
         scene_bounds: &Aabb,
         camera: &Camera,
-        direction: Vec3,
+        shadow_view: Matrix4,
     ) -> Aabb {
         let camera_frustum_world_space_bounding_sphere =
             camera.frustum_world_space().bounding_sphere();
@@ -587,7 +587,7 @@ fn main() {
             2.0 * camera_frustum_world_space_bounding_sphere.radius / shadow_map_size[1];
 
         let camera_frustum_light_space_bounding_sphere_center = Point3::from(
-            Matrix4::look_to(Point3::ZERO, direction, Vec3::Y)
+            shadow_view
                 * camera_frustum_world_space_bounding_sphere
                     .center
                     .with_w(1.0),
@@ -650,7 +650,7 @@ fn main() {
                 far_top_right,
                 far_bottom_left,
                 far_bottom_right,
-            } = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y) * scene_bounds.as_cuboid();
+            } = shadow_view * scene_bounds.as_cuboid();
 
             vec![
                 // Near face
@@ -715,13 +715,12 @@ fn main() {
 
     struct DirectionalLightInfo {
         shadow_map_id: u32,
+        shadow_view: Matrix4,
         shadow_view_inverse: Matrix4,
         shadow_map_atlas_position: Vec2,
         shadow_map_atlas_size: f32,
-        direction: Vec3,
-        aabb: Aabb,
     }
-    let directional_light_info = {
+    let (directional_light_info, directional_light_initial_aabb) = {
         let direction = Vec3 {
             x: 1.0,
             y: -1.0,
@@ -731,15 +730,15 @@ fn main() {
         let position = shadow_map_atlas_entry.position();
         let size = shadow_map_atlas_entry.size();
 
+        let shadow_view = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y);
+
         let aabb = fit_orthographic_projection_to_camera(
             [shadow_map_atlas_entry.size(), shadow_map_atlas_entry.size()],
             &shadow_caster_scene_bounds,
             &camera,
-            direction,
+            shadow_view,
         );
         debug_assert!(aabb.valid(), "invalid aabb: {:?}", aabb);
-
-        let shadow_view = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y);
 
         let id = shadow_map_lights_buffer.insert(
             &queue,
@@ -774,18 +773,20 @@ fn main() {
             shadow_map_atlas_entry,
         });
 
-        DirectionalLightInfo {
-            shadow_map_id: id,
-            shadow_view_inverse: shadow_view.inverse(),
-            shadow_map_atlas_position: position,
-            shadow_map_atlas_size: size,
-            direction,
+        (
+            DirectionalLightInfo {
+                shadow_map_id: id,
+                shadow_view,
+                shadow_view_inverse: shadow_view.inverse(),
+                shadow_map_atlas_position: position,
+                shadow_map_atlas_size: size,
+            },
             aabb,
-        }
+        )
     };
 
     /*
-    A floating point depth buffer is pretty important for working with a high `camera.near` to
+    A floating point depth buffer seems pretty important for working with a high `camera.near` to
     `camera.far` ratio.
 
     This fixed some weird popping in/out I was getting on certain not-close geometry.
@@ -999,7 +1000,7 @@ fn main() {
 
         let offset = render_wireframe_vertex_buffer.len();
 
-        for (from, to) in directional_light_info.aabb.as_cuboid().wireframe_mesh() {
+        for (from, to) in directional_light_initial_aabb.as_cuboid().wireframe_mesh() {
             render_wireframe_vertex_buffer.insert(
                 &queue,
                 render_wireframe::VertexInput {
@@ -1208,33 +1209,28 @@ fn main() {
                     camera_updated = false;
 
                     if propagate_camera_updates {
-                        let aabb = fit_orthographic_projection_to_camera(
+                        let directional_light_aabb = fit_orthographic_projection_to_camera(
                             [
                                 directional_light_info.shadow_map_atlas_size,
                                 directional_light_info.shadow_map_atlas_size,
                             ],
                             &shadow_caster_scene_bounds,
                             &camera,
-                            directional_light_info.direction,
+                            directional_light_info.shadow_view,
                         );
 
-                        let shadow_view = Matrix4::look_to(
-                            Point3::ZERO,
-                            directional_light_info.direction,
-                            Vec3::Y,
-                        );
                         shadow_map_lights_buffer.update(
                             &queue,
                             directional_light_info.shadow_map_id,
                             shadow_maps::Light {
-                                shadow_view,
+                                shadow_view: directional_light_info.shadow_view,
                                 shadow_projection: Matrix4::ortho(
-                                    aabb.min.x,
-                                    aabb.max.x,
-                                    aabb.min.y,
-                                    aabb.max.y,
-                                    -aabb.max.z,
-                                    -aabb.min.z,
+                                    directional_light_aabb.min.x,
+                                    directional_light_aabb.max.x,
+                                    directional_light_aabb.min.y,
+                                    directional_light_aabb.max.y,
+                                    -directional_light_aabb.max.z,
+                                    -directional_light_aabb.min.z,
                                 ),
                                 shadow_map_atlas_position: directional_light_info
                                     .shadow_map_atlas_position
@@ -1247,14 +1243,11 @@ fn main() {
                             },
                         );
 
-                        model_matrices.update(
-                            &queue,
-                            directional_light_frustum_model_matrix_id,
-                            shadow_view.inverse(),
-                        );
-
-                        for (index, (from, to)) in
-                            aabb.as_cuboid().wireframe_mesh().into_iter().enumerate()
+                        for (index, (from, to)) in directional_light_aabb
+                            .as_cuboid()
+                            .wireframe_mesh()
+                            .into_iter()
+                            .enumerate()
                         {
                             render_wireframe_vertex_buffer.update(
                                 &queue,

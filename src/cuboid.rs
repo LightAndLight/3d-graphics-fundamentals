@@ -1,4 +1,4 @@
-use crate::{matrix::Matrix4, point::Point3};
+use crate::{aabb::Aabb, matrix::Matrix4, point::Point3};
 
 pub struct Cuboid {
     pub near_top_left: Point3,
@@ -42,6 +42,53 @@ impl Cuboid {
             + self.far_top_left
             + self.far_top_right)
             / 8.0
+    }
+
+    pub fn aabb(&self) -> Aabb {
+        let vertices = [
+            self.far_bottom_left,
+            self.far_bottom_right,
+            self.far_top_left,
+            self.far_top_right,
+            self.near_bottom_left,
+            self.near_bottom_right,
+            self.near_top_left,
+            self.near_top_right,
+        ];
+
+        let (min_x, max_x, min_y, max_y, min_z, max_z) = vertices.into_iter().fold(
+            (
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+            ),
+            |(min_x, max_x, min_y, max_y, min_z, max_z), point| {
+                (
+                    min_x.min(point.x),
+                    max_x.max(point.x),
+                    min_y.min(point.y),
+                    max_y.max(point.y),
+                    min_z.min(point.z),
+                    max_z.max(point.z),
+                )
+            },
+        );
+
+        Aabb {
+            min: Point3 {
+                x: min_x,
+                y: min_y,
+                z: min_z,
+            },
+            max: Point3 {
+                x: max_x,
+                y: max_y,
+                z: max_z,
+            },
+        }
     }
 }
 

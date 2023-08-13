@@ -2,8 +2,9 @@
   inputs = {
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
+    ipso.url = "github:lightandlight/ipso";
   };
-  outputs = { self, nixpkgs, flake-utils, rust-overlay }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, ipso }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
@@ -19,6 +20,7 @@
         devShell =
           pkgs.mkShell {
             buildInputs = with pkgs; [
+              ipso.defaultPackage.${system}
               (rust-bin.stable.${rustVersion}.default.override {
                 extensions = [
                   "cargo"

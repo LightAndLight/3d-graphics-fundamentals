@@ -567,6 +567,7 @@ fn main() {
     }
 
     fn fit_orthographic_projection_to_camera(
+        shadow_map_size: [f32; 2],
         scene_bounds: &Aabb,
         camera: &Camera,
         direction: Vec3,
@@ -574,6 +575,14 @@ fn main() {
         let camera_frustum_world_space = camera.frustum_world_space();
         let camera_frustum_light_space =
             Matrix4::look_to(Point3::ZERO, direction, Vec3::Y) * camera_frustum_world_space;
+
+        let camera_frustum_light_space_aabb = camera_frustum_light_space.aabb();
+        let camera_frustum_light_space_aabb_max_width =
+            camera_frustum_light_space_aabb.max.x - camera_frustum_light_space_aabb.min.x;
+        let camera_frustum_light_space_aabb_max_height =
+            camera_frustum_light_space_aabb.max.y - camera_frustum_light_space_aabb.min.y;
+        let shadow_texel_x = camera_frustum_light_space_aabb_max_width / shadow_map_size[0];
+        let shadow_texel_y = camera_frustum_light_space_aabb_max_height / shadow_map_size[1];
 
         let camera_shadow_points = [
             camera_frustum_light_space.near_top_left,
@@ -602,6 +611,10 @@ fn main() {
                 )
             },
         );
+        let left = (left / shadow_texel_x).floor() * shadow_texel_x;
+        let right = (right / shadow_texel_x).floor() * shadow_texel_x;
+        let bottom = (bottom / shadow_texel_y).floor() * shadow_texel_y;
+        let top = (top / shadow_texel_y).floor() * shadow_texel_y;
 
         let left_clipping_plane = clip::Plane::new(
             Vec3::X,
@@ -727,8 +740,12 @@ fn main() {
         let position = shadow_map_atlas_entry.position();
         let size = shadow_map_atlas_entry.size();
 
-        let aabb =
-            fit_orthographic_projection_to_camera(&shadow_caster_scene_bounds, &camera, direction);
+        let aabb = fit_orthographic_projection_to_camera(
+            [shadow_map_atlas_entry.size(), shadow_map_atlas_entry.size()],
+            &shadow_caster_scene_bounds,
+            &camera,
+            direction,
+        );
         debug_assert!(aabb.valid(), "invalid aabb: {:?}", aabb);
 
         let shadow_view = Matrix4::look_to(Point3::ZERO, direction, Vec3::Y);
@@ -1201,6 +1218,10 @@ fn main() {
 
                     if propagate_camera_updates {
                         let aabb = fit_orthographic_projection_to_camera(
+                            [
+                                directional_light_info.shadow_map_atlas_size,
+                                directional_light_info.shadow_map_atlas_size,
+                            ],
                             &shadow_caster_scene_bounds,
                             &camera,
                             directional_light_info.direction,

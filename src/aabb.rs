@@ -99,50 +99,6 @@ impl Aabb {
 
     pub fn transform(&self, matrix: Matrix4) -> Self {
         let value = matrix * self.as_cuboid();
-
-        let vertices = [
-            value.far_bottom_left,
-            value.far_bottom_right,
-            value.far_top_left,
-            value.far_top_right,
-            value.near_bottom_left,
-            value.near_bottom_right,
-            value.near_top_left,
-            value.near_top_right,
-        ];
-
-        let (min_x, max_x, min_y, max_y, min_z, max_z) = vertices.into_iter().fold(
-            (
-                f32::INFINITY,
-                f32::NEG_INFINITY,
-                f32::INFINITY,
-                f32::NEG_INFINITY,
-                f32::INFINITY,
-                f32::NEG_INFINITY,
-            ),
-            |(min_x, max_x, min_y, max_y, min_z, max_z), point| {
-                (
-                    min_x.min(point.x),
-                    max_x.max(point.x),
-                    min_y.min(point.y),
-                    max_y.max(point.y),
-                    min_z.min(point.z),
-                    max_z.max(point.z),
-                )
-            },
-        );
-
-        Self {
-            min: Point3 {
-                x: min_x,
-                y: min_y,
-                z: min_z,
-            },
-            max: Point3 {
-                x: max_x,
-                y: max_y,
-                z: max_z,
-            },
-        }
+        value.aabb()
     }
 }

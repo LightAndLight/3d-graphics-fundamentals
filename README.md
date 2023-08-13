@@ -99,6 +99,7 @@
   * Projection fitting
     * <https://learn.microsoft.com/en-us/windows/win32/dxtecharts/common-techniques-to-improve-shadow-depth-maps#techniques-to-improve-shadow-maps>
     * <https://gamedev.stackexchange.com/questions/73851/how-do-i-fit-the-camera-frustum-inside-directional-light-space>
+    * <https://www.gamedev.net/forums/topic/591684-xna-40---shimmering-shadow-maps/>
 * Depth buffer precision / logarithmic depth buffers
   * <https://outerra.blogspot.com/2009/08/logarithmic-z-buffer.html>
   * <https://www.gamedev.net/blog/73/entry-2006307-tip-of-the-day-logarithmic-zbuffer-artifacts-fix/>

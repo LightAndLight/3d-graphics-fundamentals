@@ -3,10 +3,8 @@ use wgpu::include_wgsl;
 use crate::{
     camera::CameraUniform,
     gpu_buffer::GpuBuffer,
-    matrix::Matrix4,
     model_matrices::{ModelMatrices, ModelMatrixId},
     point::Point3,
-    vector::Vec3,
 };
 
 #[repr(C)]

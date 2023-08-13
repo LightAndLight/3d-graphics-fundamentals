@@ -23,3 +23,4 @@ pub mod tone_mapping;
 pub mod vector;
 pub mod vertex;
 pub mod vertex_buffer;
+pub mod wireframe;

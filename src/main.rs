@@ -31,8 +31,9 @@ use it::{
     shadow_maps::{self, ShadowMaps},
     shape,
     tone_mapping::{self, ToneMapping},
-    vector::{Vec2, Vec3},
+    vector::Vec3,
     vertex_buffer::VertexBuffer,
+    wireframe,
 };
 use wgpu::util::DeviceExt;
 use winit::{
@@ -705,6 +706,14 @@ fn main() {
         }
     }
 
+    let mut render_wireframe_vertex_buffer: GpuBuffer<render_wireframe::VertexInput> =
+        GpuBuffer::new(
+            &device,
+            Some("render_wireframe_vertex_buffer"),
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            100,
+        );
+
     let mut directional_lights_buffer: GpuBuffer<DirectionalLightGpu> = GpuBuffer::new(
         &device,
         Some("directional_lights"),
@@ -713,14 +722,7 @@ fn main() {
     );
     let mut directional_lights = Vec::new();
 
-    struct DirectionalLightInfo {
-        shadow_map_id: u32,
-        shadow_view: Matrix4,
-        shadow_view_inverse: Matrix4,
-        shadow_map_atlas_position: Vec2,
-        shadow_map_atlas_size: f32,
-    }
-    let (directional_light_info, directional_light_initial_aabb) = {
+    {
         let direction = Vec3 {
             x: 1.0,
             y: -1.0,
@@ -768,21 +770,24 @@ fn main() {
                 shadow_map_light_id: id,
             },
         );
+
+        let shadow_view_inverse = shadow_view.inverse();
+
+        let wireframe = wireframe::add(
+            &queue,
+            &mut model_matrices,
+            &mut render_wireframe_vertex_buffer,
+            shadow_view_inverse,
+            aabb.as_cuboid().wireframe_mesh(),
+        );
+
         directional_lights.push(DirectionalLight {
             shadow_map_light_gpu_id: id,
             shadow_map_atlas_entry,
+            shadow_view,
+            shadow_view_inverse,
+            wireframe: Some(wireframe),
         });
-
-        (
-            DirectionalLightInfo {
-                shadow_map_id: id,
-                shadow_view,
-                shadow_view_inverse: shadow_view.inverse(),
-                shadow_map_atlas_position: position,
-                shadow_map_atlas_size: size,
-            },
-            aabb,
-        )
     };
 
     /*
@@ -963,94 +968,29 @@ fn main() {
         },
     );
 
-    let mut render_wireframe_vertex_buffer: GpuBuffer<render_wireframe::VertexInput> =
-        GpuBuffer::new(
-            &device,
-            Some("render_wireframe_vertex_buffer"),
-            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            100,
-        );
-
-    {
-        let model_matrix_id = model_matrices.insert(&queue, Matrix4::IDENTITY);
-        for (from, to) in shadow_caster_scene_bounds.as_cuboid().wireframe_mesh() {
-            render_wireframe_vertex_buffer.insert(
-                &queue,
-                render_wireframe::VertexInput {
-                    position: from,
-                    model_matrix_id,
-                },
-            );
-            render_wireframe_vertex_buffer.insert(
-                &queue,
-                render_wireframe::VertexInput {
-                    position: to,
-                    model_matrix_id,
-                },
-            );
-        }
-    }
-
-    let (
-        directional_light_frustum_model_matrix_id,
-        directional_light_frustum_wireframe_vertex_buffer_offset,
-    ) = {
-        let model_matrix_id =
-            model_matrices.insert(&queue, directional_light_info.shadow_view_inverse);
-
-        let offset = render_wireframe_vertex_buffer.len();
-
-        for (from, to) in directional_light_initial_aabb.as_cuboid().wireframe_mesh() {
-            render_wireframe_vertex_buffer.insert(
-                &queue,
-                render_wireframe::VertexInput {
-                    position: from,
-                    model_matrix_id,
-                },
-            );
-            render_wireframe_vertex_buffer.insert(
-                &queue,
-                render_wireframe::VertexInput {
-                    position: to,
-                    model_matrix_id,
-                },
-            );
-        }
-        (model_matrix_id, offset)
-    };
+    wireframe::add(
+        &queue,
+        &mut model_matrices,
+        &mut render_wireframe_vertex_buffer,
+        Matrix4::IDENTITY,
+        shadow_caster_scene_bounds.as_cuboid().wireframe_mesh(),
+    );
 
     let mut render_camera_frustum_wireframe = true;
     let mut render_camera_frustum_wireframe_updated = false;
-    let camera_frustum_model_matrix_id = {
-        let camera_frustum = camera.frustum_camera_space();
-
+    let camera_frustum_wireframe = wireframe::add(
+        &queue,
+        &mut model_matrices,
+        &mut render_wireframe_vertex_buffer,
         /* So the camera's "model" matrix is the inverse of its view matrix (<https://jsantell.com/model-view-projection/>).
         That's cool!
 
         A "model" matrix takes model-space coordinates to world-space coordinates. "Camera-space" is the camera's model-space,
         and the view matrix takes world-space coordinates to camera-space coordinates, which is the inverse of the "model" transformation.
         */
-        let model_matrix_id = model_matrices.insert(&queue, camera.view_matrix().inverse());
-
-        for (from, to) in camera_frustum.wireframe_mesh() {
-            render_wireframe_vertex_buffer.insert(
-                &queue,
-                render_wireframe::VertexInput {
-                    position: from,
-                    model_matrix_id,
-                },
-            );
-            render_wireframe_vertex_buffer.insert(
-                &queue,
-                render_wireframe::VertexInput {
-                    position: to,
-                    model_matrix_id,
-                },
-            );
-        }
-
-        model_matrix_id
-    };
+        camera.view_matrix().inverse(),
+        camera.frustum_camera_space().wireframe_mesh(),
+    );
 
     let render_wireframe = RenderWireframe::new(
         &device,
@@ -1209,72 +1149,71 @@ fn main() {
                     camera_updated = false;
 
                     if propagate_camera_updates {
-                        let directional_light_aabb = fit_orthographic_projection_to_camera(
-                            [
-                                directional_light_info.shadow_map_atlas_size,
-                                directional_light_info.shadow_map_atlas_size,
-                            ],
-                            &shadow_caster_scene_bounds,
-                            &camera,
-                            directional_light_info.shadow_view,
-                        );
-
-                        shadow_map_lights_buffer.update(
-                            &queue,
-                            directional_light_info.shadow_map_id,
-                            shadow_maps::Light {
-                                shadow_view: directional_light_info.shadow_view,
-                                shadow_projection: Matrix4::ortho(
-                                    directional_light_aabb.min.x,
-                                    directional_light_aabb.max.x,
-                                    directional_light_aabb.min.y,
-                                    directional_light_aabb.max.y,
-                                    -directional_light_aabb.max.z,
-                                    -directional_light_aabb.min.z,
-                                ),
-                                shadow_map_atlas_position: directional_light_info
-                                    .shadow_map_atlas_position
-                                    .into(),
-                                shadow_map_atlas_size: [
-                                    directional_light_info.shadow_map_atlas_size,
-                                    directional_light_info.shadow_map_atlas_size,
-                                ],
-                                _padding: [0, 0, 0, 0, 0, 0, 0],
-                            },
-                        );
-
-                        for (index, (from, to)) in directional_light_aabb
-                            .as_cuboid()
-                            .wireframe_mesh()
-                            .into_iter()
-                            .enumerate()
-                        {
-                            render_wireframe_vertex_buffer.update(
-                                &queue,
-                                directional_light_frustum_wireframe_vertex_buffer_offset
-                                    + 2 * index as u32,
-                                render_wireframe::VertexInput {
-                                    position: from,
-                                    model_matrix_id: directional_light_frustum_model_matrix_id,
-                                },
-                            );
-                            render_wireframe_vertex_buffer.update(
-                                &queue,
-                                directional_light_frustum_wireframe_vertex_buffer_offset
-                                    + 2 * index as u32
-                                    + 1,
-                                render_wireframe::VertexInput {
-                                    position: to,
-                                    model_matrix_id: directional_light_frustum_model_matrix_id,
-                                },
-                            );
-                        }
-
                         model_matrices.update(
                             &queue,
-                            camera_frustum_model_matrix_id,
+                            camera_frustum_wireframe.model_matrix_id,
                             camera.view_matrix().inverse(),
                         );
+
+                        for directional_light in &directional_lights {
+                            let aabb = fit_orthographic_projection_to_camera(
+                                [
+                                    directional_light.shadow_map_atlas_entry.size(),
+                                    directional_light.shadow_map_atlas_entry.size(),
+                                ],
+                                &shadow_caster_scene_bounds,
+                                &camera,
+                                directional_light.shadow_view,
+                            );
+
+                            shadow_map_lights_buffer.update(
+                                &queue,
+                                directional_light.shadow_map_light_gpu_id,
+                                shadow_maps::Light {
+                                    shadow_view: directional_light.shadow_view,
+                                    shadow_projection: Matrix4::ortho(
+                                        aabb.min.x,
+                                        aabb.max.x,
+                                        aabb.min.y,
+                                        aabb.max.y,
+                                        -aabb.max.z,
+                                        -aabb.min.z,
+                                    ),
+                                    shadow_map_atlas_position: directional_light
+                                        .shadow_map_atlas_entry
+                                        .position()
+                                        .into(),
+                                    shadow_map_atlas_size: [
+                                        directional_light.shadow_map_atlas_entry.size(),
+                                        directional_light.shadow_map_atlas_entry.size(),
+                                    ],
+                                    _padding: [0, 0, 0, 0, 0, 0, 0],
+                                },
+                            );
+
+                            if let Some(wireframe) = &directional_light.wireframe {
+                                for (index, (from, to)) in
+                                    aabb.as_cuboid().wireframe_mesh().into_iter().enumerate()
+                                {
+                                    render_wireframe_vertex_buffer.update(
+                                        &queue,
+                                        wireframe.vertex_buffer_offset + 2 * index as u32,
+                                        render_wireframe::VertexInput {
+                                            position: from,
+                                            model_matrix_id: wireframe.model_matrix_id,
+                                        },
+                                    );
+                                    render_wireframe_vertex_buffer.update(
+                                        &queue,
+                                        wireframe.vertex_buffer_offset + 2 * index as u32 + 1,
+                                        render_wireframe::VertexInput {
+                                            position: to,
+                                            model_matrix_id: wireframe.model_matrix_id,
+                                        },
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
 

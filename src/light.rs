@@ -1,4 +1,7 @@
-use crate::{color::Color, model_matrices::ModelMatrixId, shadow_map_atlas, vector::Vec3};
+use crate::{
+    color::Color, matrix::Matrix4, model_matrices::ModelMatrixId, shadow_map_atlas, vector::Vec3,
+    wireframe::Wireframe,
+};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -66,4 +69,7 @@ pub struct DirectionalLightGpu {
 pub struct DirectionalLight {
     pub shadow_map_light_gpu_id: u32,
     pub shadow_map_atlas_entry: shadow_map_atlas::ShadowMapAtlasEntry,
+    pub shadow_view: Matrix4,
+    pub shadow_view_inverse: Matrix4,
+    pub wireframe: Option<Wireframe>,
 }

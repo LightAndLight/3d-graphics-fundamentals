@@ -1,33 +1,17 @@
-use egui_wgpu::renderer::ScreenDescriptor;
 use winit::window::Window;
 
 use crate::camera;
 
 pub struct RenderEgui {
-    screen_descriptor: ScreenDescriptor,
     egui_wgpu_renderer: egui_wgpu::Renderer,
 }
 
 impl RenderEgui {
-    pub fn new(
-        device: &wgpu::Device,
-        surface_format: wgpu::TextureFormat,
-        pixels_per_point: f32,
-        width: u32,
-        height: u32,
-    ) -> Self {
-        let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
-            size_in_pixels: [width, height],
-            pixels_per_point,
-        };
-
+    pub fn new(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Self {
         let egui_wgpu_renderer =
             egui_wgpu::renderer::Renderer::new(device, surface_format, None, 1);
 
-        Self {
-            screen_descriptor,
-            egui_wgpu_renderer,
-        }
+        Self { egui_wgpu_renderer }
     }
 
     pub fn record(
@@ -35,6 +19,7 @@ impl RenderEgui {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         window: &Window,
+        screen_descriptor: &egui_wgpu::renderer::ScreenDescriptor,
         egui_winit_state: &mut egui_winit::State,
         egui_context: &egui::Context,
         mouse_look: &camera::MouseLook,
@@ -66,7 +51,7 @@ impl RenderEgui {
             queue,
             command_encoder,
             &paint_jobs,
-            &self.screen_descriptor,
+            screen_descriptor,
         );
 
         let mut render_pass = command_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -83,6 +68,6 @@ impl RenderEgui {
         });
 
         self.egui_wgpu_renderer
-            .render(&mut render_pass, &paint_jobs, &self.screen_descriptor)
+            .render(&mut render_pass, &paint_jobs, screen_descriptor)
     }
 }

@@ -405,7 +405,7 @@ fn main() {
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
 
     let hdr_render_target_format = wgpu::TextureFormat::Rgba32Float;
-    let hdr_render_target = device.create_texture(&wgpu::TextureDescriptor {
+    let mut hdr_render_target_texture_descriptor = wgpu::TextureDescriptor {
         label: Some("hdr_render_target"),
         size: wgpu::Extent3d {
             width: surface_config.width,
@@ -418,8 +418,9 @@ fn main() {
         format: hdr_render_target_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
-    });
-    let hdr_render_target_view =
+    };
+    let mut hdr_render_target = device.create_texture(&hdr_render_target_texture_descriptor);
+    let mut hdr_render_target_view =
         hdr_render_target.create_view(&wgpu::TextureViewDescriptor::default());
 
     let hdr_render_target_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -802,9 +803,8 @@ fn main() {
     * <https://outerra.blogspot.com/2012/11/maximizing-depth-buffer-range-and.html>
     */
     let depth_texture_format = wgpu::TextureFormat::Depth32Float;
-    let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+    let mut depth_texture_descriptor = wgpu::TextureDescriptor {
         label: Some("depth_texture"),
-        // TODO: recreate this texture when window is resized.
         size: wgpu::Extent3d {
             width: surface_config.width,
             height: surface_config.height,
@@ -816,8 +816,9 @@ fn main() {
         format: depth_texture_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
-    });
-    let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor {
+    };
+    let mut depth_texture = device.create_texture(&depth_texture_descriptor);
+    let depth_texture_view_descriptor = wgpu::TextureViewDescriptor {
         label: Some("depth_texture_view"),
         format: None,
         dimension: None,
@@ -826,7 +827,8 @@ fn main() {
         mip_level_count: None,
         base_array_layer: 0,
         array_layer_count: None,
-    });
+    };
+    let mut depth_texture_view = depth_texture.create_view(&depth_texture_view_descriptor);
 
     let shadow_maps = ShadowMaps::new(
         &device,
@@ -887,27 +889,31 @@ fn main() {
         },
     );
 
-    let num_pixels = surface_config.width * surface_config.height;
-
-    let total_luminance_threads: u32 = 256;
-    let total_luminance_pixels_per_thread_buffer =
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("total_luminance_pixels_per_thread"),
-            contents: bytemuck::cast_slice(&[num_pixels / total_luminance_threads
-                + if num_pixels % total_luminance_threads == 0 {
-                    0
-                } else {
-                    1
-                }]),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+    const TOTAL_LUMINANCE_THREADS: u32 = 256;
+    fn total_luminance_pixels_per_thread(num_pixels: u32) -> u32 {
+        num_pixels / TOTAL_LUMINANCE_THREADS
+            + if num_pixels % TOTAL_LUMINANCE_THREADS == 0 {
+                0
+            } else {
+                1
+            }
+    }
+    let mut total_luminance_pixels_per_thread_buffer = GpuBuffer::new(
+        &device,
+        Some("total_luminance_pixels_per_thread"),
+        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
+        1,
+    );
+    let mut num_pixels = surface_config.width * surface_config.height;
+    total_luminance_pixels_per_thread_buffer
+        .insert(&queue, total_luminance_pixels_per_thread(num_pixels));
 
     let total_luminance_intermediate_buffer =
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("total_luminance_intermediate"),
             contents: bytemuck::cast_slice(
                 &std::iter::repeat(0.0)
-                    .take(total_luminance_threads as usize)
+                    .take(TOTAL_LUMINANCE_THREADS as usize)
                     .collect::<Vec<f32>>(),
             ),
             usage: wgpu::BufferUsages::STORAGE,
@@ -933,12 +939,13 @@ fn main() {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
-    let luminance = Luminance::new(
+    let mut luminance = Luminance::new(
         &device,
         luminance::BindGroup0 {
             hdr_render_target: &hdr_render_target_view,
             hdr_render_target_sampler: &hdr_render_target_sampler,
-            total_luminance_pixels_per_thread: &total_luminance_pixels_per_thread_buffer,
+            total_luminance_pixels_per_thread: total_luminance_pixels_per_thread_buffer
+                .as_raw_buffer(),
             total_luminance_intermediate: &total_luminance_intermediate_buffer,
             average_luminance: &average_luminance_buffer,
             auto_EV100: &auto_EV100_buffer,
@@ -957,7 +964,7 @@ fn main() {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-    let tone_mapping = ToneMapping::new(
+    let mut tone_mapping = ToneMapping::new(
         &device,
         surface_format,
         tone_mapping::BindGroup0 {
@@ -1002,17 +1009,15 @@ fn main() {
         },
     );
 
+    let mut render_egui = RenderEgui::new(&device, surface_format);
+    let egui_context = egui::Context::default();
     let pixels_per_point = 2.0;
-    let mut render_egui = RenderEgui::new(
-        &device,
-        surface_format,
-        pixels_per_point,
-        surface_config.width,
-        surface_config.height,
-    );
     let mut egui_winit_state = egui_winit::State::new(&window);
     egui_winit_state.set_pixels_per_point(pixels_per_point);
-    let egui_context = egui::Context::default();
+    let mut screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
+        size_in_pixels: window.inner_size().into(),
+        pixels_per_point: egui_winit_state.pixels_per_point(),
+    };
 
     let mut mouse_look = camera::MouseLook::new(&window, true);
 
@@ -1024,6 +1029,19 @@ fn main() {
     let mut propagate_camera_updates = true;
 
     event_loop.run(move |event, _, control_flow| {
+        let depth_texture_descriptor = &mut depth_texture_descriptor;
+        let depth_texture = &mut depth_texture;
+        let depth_texture_view = &mut depth_texture_view;
+
+        let hdr_render_target_texture_descriptor = &mut hdr_render_target_texture_descriptor;
+        let hdr_render_target = &mut hdr_render_target;
+        let hdr_render_target_view = &mut hdr_render_target_view;
+
+        let num_pixels = &mut num_pixels;
+
+        let egui_winit_state = &mut egui_winit_state;
+        let screen_descriptor = &mut screen_descriptor;
+
         *control_flow = ControlFlow::Poll;
 
         match event {
@@ -1046,12 +1064,67 @@ fn main() {
                             mouse_look.set(&window, false);
                         }
                         WindowEvent::Resized(physical_size) => {
+                            log::debug!("resized to {:?}", physical_size);
+
                             surface_config.width = physical_size.width;
                             surface_config.height = physical_size.height;
                             surface.configure(&device, &surface_config);
 
+                            depth_texture_descriptor.size.width = surface_config.width;
+                            depth_texture_descriptor.size.height = surface_config.height;
+                            *depth_texture = device.create_texture(depth_texture_descriptor);
+                            *depth_texture_view =
+                                depth_texture.create_view(&depth_texture_view_descriptor);
+
+                            hdr_render_target_texture_descriptor.size.width = surface_config.width;
+                            hdr_render_target_texture_descriptor.size.height =
+                                surface_config.height;
+                            *hdr_render_target =
+                                device.create_texture(hdr_render_target_texture_descriptor);
+                            *hdr_render_target_view = hdr_render_target
+                                .create_view(&wgpu::TextureViewDescriptor::default());
+
+                            luminance.set_bind_group_0(
+                                &device,
+                                luminance::BindGroup0 {
+                                    hdr_render_target: hdr_render_target_view,
+                                    hdr_render_target_sampler: &hdr_render_target_sampler,
+                                    total_luminance_pixels_per_thread:
+                                        total_luminance_pixels_per_thread_buffer.as_raw_buffer(),
+                                    total_luminance_intermediate:
+                                        &total_luminance_intermediate_buffer,
+                                    average_luminance: &average_luminance_buffer,
+                                    auto_EV100: &auto_EV100_buffer,
+                                    saturating_luminance: &saturating_luminance_buffer,
+                                },
+                            );
+
+                            tone_mapping.set_bind_group_0(
+                                &device,
+                                tone_mapping::BindGroup0 {
+                                    hdr_render_target: hdr_render_target_view,
+                                    hdr_render_target_sampler: &hdr_render_target_sampler,
+                                    tone_mapping_enabled: &tone_mapping_enabled_buffer,
+                                    saturating_luminance: &saturating_luminance_buffer,
+                                },
+                            );
+
+                            *num_pixels = surface_config.width * surface_config.height;
+                            total_luminance_pixels_per_thread_buffer.update(
+                                &queue,
+                                0,
+                                total_luminance_pixels_per_thread(*num_pixels),
+                            );
+
                             camera.aspect =
                                 surface_config.width as f32 / surface_config.height as f32;
+                            camera_updated = true;
+
+                            *egui_winit_state = egui_winit::State::new(&window);
+                            egui_winit_state.set_pixels_per_point(pixels_per_point);
+
+                            screen_descriptor.size_in_pixels[0] = surface_config.width;
+                            screen_descriptor.size_in_pixels[1] = surface_config.height;
                         }
                         WindowEvent::KeyboardInput { input, .. } => {
                             if let Some(keycode) = input.virtual_keycode {
@@ -1265,12 +1338,12 @@ fn main() {
                         &vertex_buffer,
                     );
 
-                    render_sky.record(&mut command_encoder, &hdr_render_target_view);
+                    render_sky.record(&mut command_encoder, hdr_render_target_view);
 
                     render_hdr.record(
                         &mut command_encoder,
-                        &hdr_render_target_view,
-                        &depth_texture_view,
+                        hdr_render_target_view,
+                        depth_texture_view,
                         &vertex_buffer,
                     );
 
@@ -1283,7 +1356,7 @@ fn main() {
                     render_wireframe.record(
                         &mut command_encoder,
                         &surface_texture_view,
-                        &depth_texture_view,
+                        depth_texture_view,
                         &render_wireframe_vertex_buffer,
                     );
 
@@ -1291,7 +1364,8 @@ fn main() {
                         &device,
                         &queue,
                         &window,
-                        &mut egui_winit_state,
+                        screen_descriptor,
+                        egui_winit_state,
                         &egui_context,
                         &mouse_look,
                         &mut command_encoder,

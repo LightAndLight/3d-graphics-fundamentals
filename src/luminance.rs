@@ -44,6 +44,13 @@ impl Luminance {
             calculate_average_luminance_pipeline,
         }
     }
+
+    pub fn set_bind_group_0(&mut self, device: &wgpu::Device, bind_group_0: BindGroup0) {
+        let (bind_group_layout_0, bind_group_0) = bind_group_0.create(device);
+        self.bind_group_layout_0 = bind_group_layout_0;
+        self.bind_group_0 = bind_group_0;
+    }
+
     pub fn record(&self, command_encoder: &mut wgpu::CommandEncoder) {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("luminance_pass"),

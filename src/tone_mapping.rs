@@ -89,6 +89,12 @@ impl ToneMapping {
         }
     }
 
+    pub fn set_bind_group_0(&mut self, device: &wgpu::Device, bind_group_0: BindGroup0) {
+        let (bind_group_layout_0, bind_group_0) = bind_group_0.create(device);
+        self.bind_group_layout_0 = bind_group_layout_0;
+        self.bind_group_0 = bind_group_0;
+    }
+
     pub fn record(&self, command_encoder: &mut wgpu::CommandEncoder, surface: &wgpu::TextureView) {
         /* I originally tried to do tone mapping + output to the frame buffer from a compute shader.
         It didn't work because I can't use the surface texture as a writeable storage texture.

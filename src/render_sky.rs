@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::{camera::CameraUniform, gpu_buffer::GpuBuffer, vector::Vec2};
+use crate::{camera::CameraUniform, gpu_variable::GpuVariable, vector::Vec2};
 
 pub struct RenderSky {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
@@ -114,10 +114,10 @@ impl RenderSky {
 }
 
 pub struct BindGroup0<'a> {
-    pub camera: &'a GpuBuffer<CameraUniform>,
+    pub camera: &'a GpuVariable<CameraUniform>,
     pub sky_texture: &'a wgpu::TextureView,
     pub sky_texture_sampler: &'a wgpu::Sampler,
-    pub sky_intensity: &'a GpuBuffer<f32>,
+    pub sky_intensity: &'a GpuVariable<f32>,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -180,7 +180,7 @@ impl<'a> BindGroup0<'a> {
         );
 
         // @group(0) @binding(3)
-        // var sky_intensity: f32;
+        // var<uniform> sky_intensity: f32;
         let sky_intensity = (
             wgpu::BindGroupLayoutEntry {
                 binding: 3,

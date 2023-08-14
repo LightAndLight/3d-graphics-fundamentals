@@ -1,3 +1,5 @@
+use wgpu::util::DeviceExt;
+
 pub struct GpuBuffer<T> {
     buffer: wgpu::Buffer,
     capacity: u32,
@@ -22,6 +24,29 @@ impl<T: Sized + bytemuck::Pod> GpuBuffer<T> {
             buffer,
             capacity,
             size: 0,
+            _phantom_data: std::marker::PhantomData,
+        }
+    }
+
+    pub fn init(
+        device: &wgpu::Device,
+        label: Option<&str>,
+        usage: wgpu::BufferUsages,
+        capacity: u32,
+        contents: &[T],
+    ) -> Self {
+        let size = contents.len() as u32;
+        assert!(size <= capacity);
+
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label,
+            usage,
+            contents: bytemuck::cast_slice(contents),
+        });
+        Self {
+            buffer,
+            capacity,
+            size,
             _phantom_data: std::marker::PhantomData,
         }
     }

@@ -13,6 +13,7 @@ use it::{
     color::Color,
     cuboid::Cuboid,
     gpu_buffer::GpuBuffer,
+    gpu_variable::GpuVariable,
     light::{
         DirectionalLight, DirectionalLightGpu, PointLight, PointLightGpu, PointLightShadowMapFace,
         ShadowMapLightIds,
@@ -36,7 +37,6 @@ use it::{
     vertex_buffer::VertexBuffer,
     wireframe,
 };
-use wgpu::util::DeviceExt;
 use winit::{
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -359,13 +359,12 @@ fn main() {
         view_formats: &[],
     });
 
-    let mut sky_intensity_buffer = GpuBuffer::new(
+    let sky_intensity_buffer = GpuVariable::new(
         &device,
         Some("sky_intensity"),
-        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        1,
+        wgpu::BufferUsages::UNIFORM,
+        80_000.0,
     );
-    sky_intensity_buffer.insert(&queue, 80_000.0);
 
     queue.write_texture(
         wgpu::ImageCopyTextureBase {
@@ -461,20 +460,20 @@ fn main() {
         far: 100.0,
     });
     let camera_move_speed: f32 = 0.05;
-    let mut camera_buffer: GpuBuffer<CameraUniform> = GpuBuffer::new(
+    let mut camera_buffer: GpuVariable<CameraUniform> = GpuVariable::new(
         &device,
         Some("camera"),
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        1,
+        camera.get().to_uniform(),
     );
-    camera_buffer.insert(&queue, camera.get().to_uniform());
 
     let mut display_normals = reactive::Var::new(false);
-    let display_normals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("display_normals"),
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        contents: bytemuck::cast_slice(&[if *display_normals.get() { 1 } else { 0 } as u32]),
-    });
+    let mut display_normals_buffer = GpuVariable::new(
+        &device,
+        Some("display_normals"),
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        if *display_normals.get() { 1 } else { 0 } as u32,
+    );
 
     let mut shadow_map_atlas =
         ShadowMapAtlas::new(&device, wgpu::TextureFormat::Depth16Unorm, 4096);
@@ -849,15 +848,11 @@ fn main() {
         },
     );
 
-    let mut show_directional_shadow_map_coverage_buffer = GpuBuffer::new(
+    let mut show_directional_shadow_map_coverage = reactive::Var::new(false);
+    let mut show_directional_shadow_map_coverage_buffer = GpuVariable::new(
         &device,
         Some("show_directional_shadow_map_coverage_buffer"),
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        1,
-    );
-    let mut show_directional_shadow_map_coverage = reactive::Var::new(false);
-    show_directional_shadow_map_coverage_buffer.insert(
-        &queue,
         if *show_directional_shadow_map_coverage.get() {
             1
         } else {
@@ -896,46 +891,51 @@ fn main() {
                 1
             }
     }
-    let mut total_luminance_pixels_per_thread_buffer = GpuBuffer::new(
+    let mut num_pixels = surface_config.width * surface_config.height;
+    let mut total_luminance_pixels_per_thread_buffer = GpuVariable::new(
         &device,
         Some("total_luminance_pixels_per_thread"),
-        wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::UNIFORM,
-        1,
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        total_luminance_pixels_per_thread(num_pixels),
     );
-    let mut num_pixels = surface_config.width * surface_config.height;
-    total_luminance_pixels_per_thread_buffer
-        .insert(&queue, total_luminance_pixels_per_thread(num_pixels));
 
-    let total_luminance_intermediate_buffer =
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("total_luminance_intermediate"),
-            contents: bytemuck::cast_slice(
-                &std::iter::repeat(0.0)
-                    .take(TOTAL_LUMINANCE_THREADS as usize)
-                    .collect::<Vec<f32>>(),
-            ),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+    let total_luminance_intermediate_buffer = {
+        let contents = std::iter::repeat(0.0)
+            .take(TOTAL_LUMINANCE_THREADS as usize)
+            .collect::<Vec<f32>>();
+        GpuBuffer::init(
+            &device,
+            Some("total_luminance_intermediate"),
+            wgpu::BufferUsages::STORAGE,
+            contents.len() as u32,
+            &contents,
+        )
+    };
 
-    let average_luminance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("average_luminance"),
-        contents: bytemuck::cast_slice(&[0.0]),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
+    let average_luminance_buffer = GpuBuffer::init(
+        &device,
+        Some("average_luminance"),
+        wgpu::BufferUsages::STORAGE,
+        1,
+        &[0.0],
+    );
 
     #[allow(non_snake_case)]
-    let auto_EV100_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("auto_EV100"),
-        contents: bytemuck::cast_slice(&[0.0]),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
+    let auto_EV100_buffer = GpuBuffer::init(
+        &device,
+        Some("auto_EV100"),
+        wgpu::BufferUsages::STORAGE,
+        1,
+        &[0.0],
+    );
 
-    let saturating_luminance_buffer =
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("saturating_luminance"),
-            contents: bytemuck::cast_slice(&[0.0]),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+    let saturating_luminance_buffer = GpuBuffer::init(
+        &device,
+        Some("saturating_luminance"),
+        wgpu::BufferUsages::STORAGE,
+        1,
+        &[0.0],
+    );
 
     let mut luminance = Luminance::new(
         &device,
@@ -952,16 +952,12 @@ fn main() {
     );
 
     let mut tone_mapping_enabled = reactive::Var::new(true);
-
-    #[allow(clippy::unnecessary_cast)]
-    let tone_mapping_enabled_buffer =
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("tone_mapping_enabled"),
-            contents: bytemuck::cast_slice(&[
-                if *tone_mapping_enabled.get() { 1 } else { 0 } as u32
-            ]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+    let mut tone_mapping_enabled_buffer = GpuVariable::new(
+        &device,
+        Some("tone_mapping_enabled"),
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        if *tone_mapping_enabled.get() { 1 } else { 0 } as u32,
+    );
 
     let mut tone_mapping = ToneMapping::new(
         &device,
@@ -1107,11 +1103,8 @@ fn main() {
                             );
 
                             *num_pixels = surface_config.width * surface_config.height;
-                            total_luminance_pixels_per_thread_buffer.update(
-                                &queue,
-                                0,
-                                total_luminance_pixels_per_thread(*num_pixels),
-                            );
+                            total_luminance_pixels_per_thread_buffer
+                                .update(&queue, total_luminance_pixels_per_thread(*num_pixels));
 
                             camera.modify_mut(&mut |camera| {
                                 camera.aspect =
@@ -1220,7 +1213,7 @@ fn main() {
                 }
 
                 camera.flush(&mut |camera| {
-                    camera_buffer.update(&queue, 0, camera.to_uniform());
+                    camera_buffer.update(&queue, camera.to_uniform());
 
                     if propagate_camera_updates {
                         model_matrices.update(
@@ -1292,26 +1285,19 @@ fn main() {
                 });
 
                 display_normals.flush(&mut |display_normals| {
-                    queue.write_buffer(
-                        &display_normals_buffer,
-                        0,
-                        bytemuck::cast_slice(&[if *display_normals { 1 } else { 0 } as u32]),
-                    );
+                    display_normals_buffer
+                        .update(&queue, if *display_normals { 1 } else { 0 } as u32);
                 });
 
                 tone_mapping_enabled.flush(&mut |tone_mapping_enabled| {
-                    queue.write_buffer(
-                        &tone_mapping_enabled_buffer,
-                        0,
-                        bytemuck::cast_slice(&[if *tone_mapping_enabled { 1 } else { 0 } as u32]),
-                    );
+                    tone_mapping_enabled_buffer
+                        .update(&queue, if *tone_mapping_enabled { 1 } else { 0 } as u32);
                 });
 
                 show_directional_shadow_map_coverage.flush(
                     &mut |show_directional_shadow_map_coverage| {
                         show_directional_shadow_map_coverage_buffer.update(
                             &queue,
-                            0,
                             if *show_directional_shadow_map_coverage {
                                 1
                             } else {

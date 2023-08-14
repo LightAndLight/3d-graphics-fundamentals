@@ -3,6 +3,7 @@ use wgpu::include_wgsl;
 use crate::{
     camera::CameraUniform,
     gpu_buffer::GpuBuffer,
+    gpu_variable::GpuVariable,
     model_matrices::{ModelMatrices, ModelMatrixId},
     point::Point3,
 };
@@ -139,7 +140,7 @@ impl RenderWireframe {
 }
 
 pub struct BindGroup0<'a> {
-    pub camera: &'a GpuBuffer<CameraUniform>,
+    pub camera: &'a GpuVariable<CameraUniform>,
     pub model_matrices: &'a ModelMatrices,
 }
 

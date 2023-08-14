@@ -1,3 +1,5 @@
+use crate::gpu_buffer::GpuBuffer;
+
 pub struct Luminance {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
     pub bind_group_0: wgpu::BindGroup,
@@ -73,10 +75,10 @@ pub struct BindGroup0<'a> {
     pub hdr_render_target: &'a wgpu::TextureView,
     pub hdr_render_target_sampler: &'a wgpu::Sampler,
     pub total_luminance_pixels_per_thread: &'a wgpu::Buffer,
-    pub total_luminance_intermediate: &'a wgpu::Buffer,
-    pub average_luminance: &'a wgpu::Buffer,
-    pub auto_EV100: &'a wgpu::Buffer,
-    pub saturating_luminance: &'a wgpu::Buffer,
+    pub total_luminance_intermediate: &'a GpuBuffer<f32>,
+    pub average_luminance: &'a GpuBuffer<f32>,
+    pub auto_EV100: &'a GpuBuffer<f32>,
+    pub saturating_luminance: &'a GpuBuffer<f32>,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -154,7 +156,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.total_luminance_intermediate,
+                    buffer: self.total_luminance_intermediate.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -177,7 +179,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 4,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.average_luminance,
+                    buffer: self.average_luminance.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -201,7 +203,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 5,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.auto_EV100,
+                    buffer: self.auto_EV100.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -224,7 +226,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 6,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.saturating_luminance,
+                    buffer: self.saturating_luminance.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),

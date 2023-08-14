@@ -1,6 +1,7 @@
 use crate::{
     camera::CameraUniform,
     gpu_buffer::GpuBuffer,
+    gpu_variable::GpuVariable,
     light::{DirectionalLightGpu, PointLightGpu},
     material::Materials,
     model_matrices::ModelMatrices,
@@ -160,9 +161,9 @@ impl RenderHdr {
 }
 
 pub struct BindGroup0<'a> {
-    pub camera: &'a GpuBuffer<CameraUniform>,
+    pub camera: &'a GpuVariable<CameraUniform>,
     pub model_matrices: &'a ModelMatrices,
-    pub display_normals: &'a wgpu::Buffer,
+    pub display_normals: &'a GpuVariable<u32>,
     pub point_lights: &'a GpuBuffer<PointLightGpu>,
     pub directional_lights: &'a GpuBuffer<DirectionalLightGpu>,
     pub materials: &'a Materials,
@@ -237,7 +238,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.display_normals,
+                    buffer: self.display_normals.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -444,7 +445,7 @@ impl<'a> BindGroup0<'a> {
 }
 
 pub struct BindGroup1<'a> {
-    pub show_directional_shadow_map_coverage: &'a GpuBuffer<u32>,
+    pub show_directional_shadow_map_coverage: &'a GpuVariable<u32>,
 }
 
 impl<'a> BindGroup1<'a> {

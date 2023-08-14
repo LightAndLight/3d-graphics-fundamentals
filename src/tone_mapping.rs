@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::vector::Vec2;
+use crate::{gpu_buffer::GpuBuffer, gpu_variable::GpuVariable, vector::Vec2};
 
 pub struct ToneMapping {
     pub bind_group_layout_0: wgpu::BindGroupLayout,
@@ -136,8 +136,8 @@ impl ToneMapping {
 pub struct BindGroup0<'a> {
     pub hdr_render_target: &'a wgpu::TextureView,
     pub hdr_render_target_sampler: &'a wgpu::Sampler,
-    pub tone_mapping_enabled: &'a wgpu::Buffer,
-    pub saturating_luminance: &'a wgpu::Buffer,
+    pub tone_mapping_enabled: &'a GpuVariable<u32>,
+    pub saturating_luminance: &'a GpuBuffer<f32>,
 }
 
 impl<'a> BindGroup0<'a> {
@@ -192,7 +192,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.tone_mapping_enabled,
+                    buffer: self.tone_mapping_enabled.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),
@@ -215,7 +215,7 @@ impl<'a> BindGroup0<'a> {
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: self.saturating_luminance,
+                    buffer: self.saturating_luminance.as_raw_buffer(),
                     offset: 0,
                     size: None,
                 }),

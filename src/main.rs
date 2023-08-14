@@ -23,6 +23,7 @@ use it::{
     matrix::Matrix4,
     model_matrices::ModelMatrices,
     point::Point3,
+    reactive,
     render_egui::RenderEgui,
     render_hdr::{self, RenderHdr},
     render_sky::{self, RenderSky},
@@ -438,7 +439,7 @@ fn main() {
         border_color: None,
     });
 
-    let mut camera = Camera {
+    let mut camera = reactive::Var::new(Camera {
         eye: Point3 {
             x: 0.0,
             y: 0.0,
@@ -458,7 +459,7 @@ fn main() {
         fovy: 45.0,
         near: 0.1,
         far: 100.0,
-    };
+    });
     let camera_move_speed: f32 = 0.05;
     let mut camera_buffer: GpuBuffer<CameraUniform> = GpuBuffer::new(
         &device,
@@ -466,16 +467,14 @@ fn main() {
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         1,
     );
-    camera_buffer.insert(&queue, camera.to_uniform());
-    let mut camera_updated = false;
+    camera_buffer.insert(&queue, camera.get().to_uniform());
 
-    let mut display_normals = false;
+    let mut display_normals = reactive::Var::new(false);
     let display_normals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("display_normals"),
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        contents: bytemuck::cast_slice(&[if display_normals { 1 } else { 0 } as u32]),
+        contents: bytemuck::cast_slice(&[if *display_normals.get() { 1 } else { 0 } as u32]),
     });
-    let mut display_normals_updated = false;
 
     let mut shadow_map_atlas =
         ShadowMapAtlas::new(&device, wgpu::TextureFormat::Depth16Unorm, 4096);
@@ -738,7 +737,7 @@ fn main() {
         let aabb = fit_orthographic_projection_to_camera(
             [shadow_map_atlas_entry.size(), shadow_map_atlas_entry.size()],
             &shadow_caster_scene_bounds,
-            &camera,
+            camera.get(),
             shadow_view,
         );
         debug_assert!(aabb.valid(), "invalid aabb: {:?}", aabb);
@@ -856,11 +855,10 @@ fn main() {
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         1,
     );
-    let mut show_directional_shadow_map_coverage = false;
-    let mut show_directional_shadow_map_coverage_updated = false;
+    let mut show_directional_shadow_map_coverage = reactive::Var::new(false);
     show_directional_shadow_map_coverage_buffer.insert(
         &queue,
-        if show_directional_shadow_map_coverage {
+        if *show_directional_shadow_map_coverage.get() {
             1
         } else {
             0
@@ -953,14 +951,15 @@ fn main() {
         },
     );
 
-    let mut tone_mapping_enabled = true;
-    let mut tone_mapping_enabled_updated = false;
+    let mut tone_mapping_enabled = reactive::Var::new(true);
 
     #[allow(clippy::unnecessary_cast)]
     let tone_mapping_enabled_buffer =
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("tone_mapping_enabled"),
-            contents: bytemuck::cast_slice(&[if tone_mapping_enabled { 1 } else { 0 } as u32]),
+            contents: bytemuck::cast_slice(&[
+                if *tone_mapping_enabled.get() { 1 } else { 0 } as u32
+            ]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -983,8 +982,6 @@ fn main() {
         shadow_caster_scene_bounds.as_cuboid().wireframe_mesh(),
     );
 
-    let mut render_camera_frustum_wireframe = true;
-    let mut render_camera_frustum_wireframe_updated = false;
     let camera_frustum_wireframe = wireframe::add(
         &queue,
         &mut model_matrices,
@@ -995,8 +992,8 @@ fn main() {
         A "model" matrix takes model-space coordinates to world-space coordinates. "Camera-space" is the camera's model-space,
         and the view matrix takes world-space coordinates to camera-space coordinates, which is the inverse of the "model" transformation.
         */
-        camera.view_matrix().inverse(),
-        camera.frustum_camera_space().wireframe_mesh(),
+        camera.get().view_matrix().inverse(),
+        camera.get().frustum_camera_space().wireframe_mesh(),
     );
 
     let render_wireframe = RenderWireframe::new(
@@ -1116,9 +1113,10 @@ fn main() {
                                 total_luminance_pixels_per_thread(*num_pixels),
                             );
 
-                            camera.aspect =
-                                surface_config.width as f32 / surface_config.height as f32;
-                            camera_updated = true;
+                            camera.modify_mut(&mut |camera| {
+                                camera.aspect =
+                                    surface_config.width as f32 / surface_config.height as f32;
+                            });
 
                             *egui_winit_state = egui_winit::State::new(&window);
                             egui_winit_state.set_pixels_per_point(pixels_per_point);
@@ -1190,36 +1188,39 @@ fn main() {
             }
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 if w_held {
-                    let camera_movement = camera_move_speed * camera.direction;
-                    camera.eye.x += camera_movement.x;
-                    camera.eye.z += camera_movement.z;
-                    camera_updated = true;
+                    camera.modify_mut(&mut |camera| {
+                        let camera_movement = camera_move_speed * camera.direction;
+                        camera.eye.x += camera_movement.x;
+                        camera.eye.z += camera_movement.z;
+                    });
                 }
 
                 if s_held {
-                    let camera_movement = camera_move_speed * camera.direction;
-                    camera.eye.x -= camera_movement.x;
-                    camera.eye.z -= camera_movement.z;
-                    camera_updated = true;
+                    camera.modify_mut(&mut |camera| {
+                        let camera_movement = camera_move_speed * camera.direction;
+                        camera.eye.x -= camera_movement.x;
+                        camera.eye.z -= camera_movement.z;
+                    });
                 }
 
                 if a_held {
-                    let camera_movement = camera_move_speed * camera.up.cross(camera.direction);
-                    camera.eye.x += camera_movement.x;
-                    camera.eye.z += camera_movement.z;
-                    camera_updated = true;
+                    camera.modify_mut(&mut |camera| {
+                        let camera_movement = camera_move_speed * camera.up.cross(camera.direction);
+                        camera.eye.x += camera_movement.x;
+                        camera.eye.z += camera_movement.z;
+                    });
                 }
 
                 if d_held {
-                    let camera_movement = camera_move_speed * camera.up.cross(camera.direction);
-                    camera.eye.x -= camera_movement.x;
-                    camera.eye.z -= camera_movement.z;
-                    camera_updated = true;
+                    camera.modify_mut(&mut |camera| {
+                        let camera_movement = camera_move_speed * camera.up.cross(camera.direction);
+                        camera.eye.x -= camera_movement.x;
+                        camera.eye.z -= camera_movement.z;
+                    });
                 }
 
-                if camera_updated {
+                camera.flush(&mut |camera| {
                     camera_buffer.update(&queue, 0, camera.to_uniform());
-                    camera_updated = false;
 
                     if propagate_camera_updates {
                         model_matrices.update(
@@ -1235,7 +1236,7 @@ fn main() {
                                     directional_light.shadow_map_atlas_entry.size(),
                                 ],
                                 &shadow_caster_scene_bounds,
-                                &camera,
+                                camera,
                                 directional_light.shadow_view,
                             );
 
@@ -1288,38 +1289,37 @@ fn main() {
                             }
                         }
                     }
-                }
+                });
 
-                if display_normals_updated {
+                display_normals.flush(&mut |display_normals| {
                     queue.write_buffer(
                         &display_normals_buffer,
                         0,
-                        bytemuck::cast_slice(&[if display_normals { 1 } else { 0 } as u32]),
+                        bytemuck::cast_slice(&[if *display_normals { 1 } else { 0 } as u32]),
                     );
-                    display_normals_updated = false;
-                }
+                });
 
-                if tone_mapping_enabled_updated {
+                tone_mapping_enabled.flush(&mut |tone_mapping_enabled| {
                     queue.write_buffer(
                         &tone_mapping_enabled_buffer,
                         0,
-                        bytemuck::cast_slice(&[if tone_mapping_enabled { 1 } else { 0 } as u32]),
+                        bytemuck::cast_slice(&[if *tone_mapping_enabled { 1 } else { 0 } as u32]),
                     );
-                    tone_mapping_enabled_updated = false;
-                }
+                });
 
-                if show_directional_shadow_map_coverage_updated {
-                    show_directional_shadow_map_coverage_buffer.update(
-                        &queue,
-                        0,
-                        if show_directional_shadow_map_coverage {
-                            1
-                        } else {
-                            0
-                        },
-                    );
-                    show_directional_shadow_map_coverage_updated = false;
-                }
+                show_directional_shadow_map_coverage.flush(
+                    &mut |show_directional_shadow_map_coverage| {
+                        show_directional_shadow_map_coverage_buffer.update(
+                            &queue,
+                            0,
+                            if *show_directional_shadow_map_coverage {
+                                1
+                            } else {
+                                0
+                            },
+                        );
+                    },
+                );
 
                 let surface_texture = surface.get_current_texture().unwrap();
                 let surface_texture_view = surface_texture
@@ -1347,7 +1347,7 @@ fn main() {
                         &vertex_buffer,
                     );
 
-                    if tone_mapping_enabled {
+                    if *tone_mapping_enabled.get() {
                         luminance.record(&mut command_encoder);
                     }
 
@@ -1381,29 +1381,27 @@ fn main() {
                                 ui.label(fps.avg_fps().round().to_string());
                             });
 
+                            let (display_normals_value, display_normals_changed) =
+                                display_normals.as_components();
                             if ui
-                                .checkbox(&mut display_normals, "Display normals")
+                                .checkbox(display_normals_value, "Display normals")
                                 .changed()
                             {
-                                display_normals_updated = true;
+                                *display_normals_changed = true;
 
                                 // Disable tone mapping when displaying normals.
-                                tone_mapping_enabled = !display_normals;
-                                tone_mapping_enabled_updated = true;
+                                tone_mapping_enabled.set(!*display_normals_value);
                             }
                             ui.checkbox(&mut propagate_camera_updates, "Propagate camera updates");
 
-                            show_directional_shadow_map_coverage_updated = ui
+                            let (
+                                show_directional_shadow_map_coverage_value,
+                                show_directional_shadow_map_coverage_changed,
+                            ) = show_directional_shadow_map_coverage.as_components();
+                            *show_directional_shadow_map_coverage_changed = ui
                                 .checkbox(
-                                    &mut show_directional_shadow_map_coverage,
+                                    show_directional_shadow_map_coverage_value,
                                     "Show directional shadow map coverage",
-                                )
-                                .changed();
-
-                            render_camera_frustum_wireframe_updated = ui
-                                .checkbox(
-                                    &mut render_camera_frustum_wireframe,
-                                    "Render camera frustum wireframe",
                                 )
                                 .changed();
 
@@ -1429,14 +1427,15 @@ fn main() {
                 ..
             } => {
                 if mouse_look.enabled() {
-                    camera.direction = cgmath::Quaternion::from_axis_angle(
-                        camera.up,
-                        cgmath::Deg(-delta_x as f32 / 10.0),
-                    ) * cgmath::Quaternion::from_axis_angle(
-                        camera.up.cross(camera.direction),
-                        cgmath::Deg(delta_y as f32 / 10.0),
-                    ) * camera.direction;
-                    camera_updated = true;
+                    camera.modify_mut(&mut |camera| {
+                        camera.direction = cgmath::Quaternion::from_axis_angle(
+                            camera.up,
+                            cgmath::Deg(-delta_x as f32 / 10.0),
+                        ) * cgmath::Quaternion::from_axis_angle(
+                            camera.up.cross(camera.direction),
+                            cgmath::Deg(delta_y as f32 / 10.0),
+                        ) * camera.direction;
+                    });
                 }
             }
             _ => {}

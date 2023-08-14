@@ -11,6 +11,7 @@ pub mod material;
 pub mod matrix;
 pub mod model_matrices;
 pub mod point;
+pub mod reactive;
 pub mod render_egui;
 pub mod render_hdr;
 pub mod render_sky;

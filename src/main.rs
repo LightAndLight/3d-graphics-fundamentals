@@ -143,7 +143,7 @@ fn main() {
         });
     log::debug!("surface texture format: {:?}", surface_format);
 
-    let mut surface_config = wgpu::SurfaceConfiguration {
+    let mut surface_config = reactive::Var::new(wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,
         width: window_size.width,
@@ -151,8 +151,8 @@ fn main() {
         present_mode: wgpu::PresentMode::Fifo,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
         view_formats: Vec::new(),
-    };
-    surface.configure(&device, &surface_config);
+    });
+    surface.configure(&device, surface_config.get());
 
     let mut model_matrices = ModelMatrices::new(&device, 1000);
     let mut shadow_caster_scene_bounds: Aabb = Aabb {
@@ -409,8 +409,8 @@ fn main() {
     let mut hdr_render_target_texture_descriptor = wgpu::TextureDescriptor {
         label: Some("hdr_render_target"),
         size: wgpu::Extent3d {
-            width: surface_config.width,
-            height: surface_config.height,
+            width: surface_config.get().width,
+            height: surface_config.get().height,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -455,7 +455,7 @@ fn main() {
             y: 1.0,
             z: 0.0,
         },
-        aspect: surface_config.width as f32 / surface_config.height as f32,
+        aspect: surface_config.get().width as f32 / surface_config.get().height as f32,
         fovy: 45.0,
         near: 0.1,
         far: 100.0,
@@ -805,8 +805,8 @@ fn main() {
     let mut depth_texture_descriptor = wgpu::TextureDescriptor {
         label: Some("depth_texture"),
         size: wgpu::Extent3d {
-            width: surface_config.width,
-            height: surface_config.height,
+            width: surface_config.get().width,
+            height: surface_config.get().height,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -888,7 +888,7 @@ fn main() {
                 1
             }
     }
-    let mut num_pixels = surface_config.width * surface_config.height;
+    let mut num_pixels = surface_config.get().width * surface_config.get().height;
     let mut total_luminance_pixels_per_thread_buffer = GpuVariable::new(
         &device,
         Some("total_luminance_pixels_per_thread"),
@@ -1056,63 +1056,10 @@ fn main() {
                         WindowEvent::Resized(physical_size) => {
                             log::debug!("resized to {:?}", physical_size);
 
-                            surface_config.width = physical_size.width;
-                            surface_config.height = physical_size.height;
-                            surface.configure(&device, &surface_config);
-
-                            depth_texture_descriptor.size.width = surface_config.width;
-                            depth_texture_descriptor.size.height = surface_config.height;
-                            *depth_texture = device.create_texture(depth_texture_descriptor);
-                            *depth_texture_view =
-                                depth_texture.create_view(&depth_texture_view_descriptor);
-
-                            hdr_render_target_texture_descriptor.size.width = surface_config.width;
-                            hdr_render_target_texture_descriptor.size.height =
-                                surface_config.height;
-                            *hdr_render_target =
-                                device.create_texture(hdr_render_target_texture_descriptor);
-                            *hdr_render_target_view = hdr_render_target
-                                .create_view(&wgpu::TextureViewDescriptor::default());
-
-                            luminance.set_bind_group_0(
-                                &device,
-                                luminance::BindGroup0 {
-                                    hdr_render_target: hdr_render_target_view,
-                                    hdr_render_target_sampler: &hdr_render_target_sampler,
-                                    total_luminance_pixels_per_thread:
-                                        total_luminance_pixels_per_thread_buffer.as_raw_buffer(),
-                                    total_luminance_intermediate:
-                                        &total_luminance_intermediate_buffer,
-                                    average_luminance: &average_luminance_buffer,
-                                    auto_EV100: &auto_EV100_buffer,
-                                    saturating_luminance: &saturating_luminance_buffer,
-                                },
-                            );
-
-                            tone_mapping.set_bind_group_0(
-                                &device,
-                                tone_mapping::BindGroup0 {
-                                    hdr_render_target: hdr_render_target_view,
-                                    hdr_render_target_sampler: &hdr_render_target_sampler,
-                                    tone_mapping_enabled: &tone_mapping_enabled_buffer,
-                                    saturating_luminance: &saturating_luminance_buffer,
-                                },
-                            );
-
-                            *num_pixels = surface_config.width * surface_config.height;
-                            total_luminance_pixels_per_thread_buffer
-                                .update(&queue, total_luminance_pixels_per_thread(*num_pixels));
-
-                            camera.modify_mut(&mut |camera| {
-                                camera.aspect =
-                                    surface_config.width as f32 / surface_config.height as f32;
+                            surface_config.modify_mut(&mut |surface_config| {
+                                surface_config.width = physical_size.width;
+                                surface_config.height = physical_size.height;
                             });
-
-                            *egui_winit_state = egui_winit::State::new(&window);
-                            egui_winit_state.set_pixels_per_point(pixels_per_point);
-
-                            screen_descriptor.size_in_pixels[0] = surface_config.width;
-                            screen_descriptor.size_in_pixels[1] = surface_config.height;
                         }
                         WindowEvent::KeyboardInput { input, .. } => {
                             if let Some(keycode) = input.virtual_keycode {
@@ -1170,8 +1117,8 @@ fn main() {
                 if mouse_look.enabled() {
                     window
                         .set_cursor_position(winit::dpi::PhysicalPosition {
-                            x: surface_config.width as f32 / 2.0,
-                            y: surface_config.height as f32 / 2.0,
+                            x: surface_config.get().width as f32 / 2.0,
+                            y: surface_config.get().height as f32 / 2.0,
                         })
                         .unwrap();
                 }
@@ -1208,6 +1155,60 @@ fn main() {
                         camera.eye.z -= camera_movement.z;
                     });
                 }
+
+                surface_config.flush(&mut |surface_config| {
+                    surface.configure(&device, surface_config);
+
+                    depth_texture_descriptor.size.width = surface_config.width;
+                    depth_texture_descriptor.size.height = surface_config.height;
+                    *depth_texture = device.create_texture(depth_texture_descriptor);
+                    *depth_texture_view = depth_texture.create_view(&depth_texture_view_descriptor);
+
+                    hdr_render_target_texture_descriptor.size.width = surface_config.width;
+                    hdr_render_target_texture_descriptor.size.height = surface_config.height;
+                    *hdr_render_target =
+                        device.create_texture(hdr_render_target_texture_descriptor);
+                    *hdr_render_target_view =
+                        hdr_render_target.create_view(&wgpu::TextureViewDescriptor::default());
+
+                    luminance.set_bind_group_0(
+                        &device,
+                        luminance::BindGroup0 {
+                            hdr_render_target: hdr_render_target_view,
+                            hdr_render_target_sampler: &hdr_render_target_sampler,
+                            total_luminance_pixels_per_thread:
+                                total_luminance_pixels_per_thread_buffer.as_raw_buffer(),
+                            total_luminance_intermediate: &total_luminance_intermediate_buffer,
+                            average_luminance: &average_luminance_buffer,
+                            auto_EV100: &auto_EV100_buffer,
+                            saturating_luminance: &saturating_luminance_buffer,
+                        },
+                    );
+
+                    tone_mapping.set_bind_group_0(
+                        &device,
+                        tone_mapping::BindGroup0 {
+                            hdr_render_target: hdr_render_target_view,
+                            hdr_render_target_sampler: &hdr_render_target_sampler,
+                            tone_mapping_enabled: &tone_mapping_enabled_buffer,
+                            saturating_luminance: &saturating_luminance_buffer,
+                        },
+                    );
+
+                    *num_pixels = surface_config.width * surface_config.height;
+                    total_luminance_pixels_per_thread_buffer
+                        .update(&queue, total_luminance_pixels_per_thread(*num_pixels));
+
+                    camera.modify_mut(&mut |camera| {
+                        camera.aspect = surface_config.width as f32 / surface_config.height as f32;
+                    });
+
+                    *egui_winit_state = egui_winit::State::new(&window);
+                    egui_winit_state.set_pixels_per_point(pixels_per_point);
+
+                    screen_descriptor.size_in_pixels[0] = surface_config.width;
+                    screen_descriptor.size_in_pixels[1] = surface_config.height;
+                });
 
                 camera.flush(&mut |camera| {
                     camera_buffer.update(&queue, camera.to_uniform());

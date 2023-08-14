@@ -34,7 +34,7 @@ impl<A> Var<A> {
         (&mut self.value, &mut self.changed)
     }
 
-    pub fn flush(&mut self, on_change: &mut dyn FnMut(&A)) {
+    pub fn react(&mut self, on_change: &mut dyn FnMut(&A)) {
         if self.changed {
             on_change(&self.value);
             self.changed = false;

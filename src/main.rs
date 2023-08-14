@@ -406,7 +406,7 @@ fn main() {
     device.poll(wgpu::Maintain::WaitForSubmissionIndex(queue.submit([])));
 
     let hdr_render_target_format = wgpu::TextureFormat::Rgba32Float;
-    let mut hdr_render_target_texture_descriptor = wgpu::TextureDescriptor {
+    let mut hdr_render_target_texture_descriptor = reactive::Var::new(wgpu::TextureDescriptor {
         label: Some("hdr_render_target"),
         size: wgpu::Extent3d {
             width: surface_config.get().width,
@@ -419,10 +419,14 @@ fn main() {
         format: hdr_render_target_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
-    };
-    let mut hdr_render_target = device.create_texture(&hdr_render_target_texture_descriptor);
-    let mut hdr_render_target_view =
-        hdr_render_target.create_view(&wgpu::TextureViewDescriptor::default());
+    });
+    let mut hdr_render_target =
+        reactive::Var::new(device.create_texture(hdr_render_target_texture_descriptor.get()));
+    let mut hdr_render_target_view = reactive::Var::new(
+        hdr_render_target
+            .get()
+            .create_view(&wgpu::TextureViewDescriptor::default()),
+    );
 
     let hdr_render_target_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("hdr_render_target_sampler"),
@@ -802,7 +806,7 @@ fn main() {
     * <https://outerra.blogspot.com/2012/11/maximizing-depth-buffer-range-and.html>
     */
     let depth_texture_format = wgpu::TextureFormat::Depth32Float;
-    let mut depth_texture_descriptor = wgpu::TextureDescriptor {
+    let mut depth_texture_descriptor = reactive::Var::new(wgpu::TextureDescriptor {
         label: Some("depth_texture"),
         size: wgpu::Extent3d {
             width: surface_config.get().width,
@@ -815,8 +819,9 @@ fn main() {
         format: depth_texture_format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
-    };
-    let mut depth_texture = device.create_texture(&depth_texture_descriptor);
+    });
+    let mut depth_texture =
+        reactive::Var::new(device.create_texture(depth_texture_descriptor.get()));
     let depth_texture_view_descriptor = wgpu::TextureViewDescriptor {
         label: Some("depth_texture_view"),
         format: None,
@@ -827,7 +832,11 @@ fn main() {
         base_array_layer: 0,
         array_layer_count: None,
     };
-    let mut depth_texture_view = depth_texture.create_view(&depth_texture_view_descriptor);
+    let mut depth_texture_view = reactive::Var::new(
+        depth_texture
+            .get()
+            .create_view(&depth_texture_view_descriptor),
+    );
 
     let shadow_maps = ShadowMaps::new(
         &device,
@@ -888,12 +897,13 @@ fn main() {
                 1
             }
     }
-    let mut num_pixels = surface_config.get().width * surface_config.get().height;
+    let mut num_pixels =
+        reactive::Var::new(surface_config.get().width * surface_config.get().height);
     let mut total_luminance_pixels_per_thread_buffer = GpuVariable::new(
         &device,
         Some("total_luminance_pixels_per_thread"),
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        total_luminance_pixels_per_thread(num_pixels),
+        total_luminance_pixels_per_thread(*num_pixels.get()),
     );
 
     let total_luminance_intermediate_buffer = {
@@ -937,7 +947,7 @@ fn main() {
     let mut luminance = Luminance::new(
         &device,
         luminance::BindGroup0 {
-            hdr_render_target: &hdr_render_target_view,
+            hdr_render_target: hdr_render_target_view.get(),
             hdr_render_target_sampler: &hdr_render_target_sampler,
             total_luminance_pixels_per_thread: total_luminance_pixels_per_thread_buffer
                 .as_raw_buffer(),
@@ -960,7 +970,7 @@ fn main() {
         &device,
         surface_format,
         tone_mapping::BindGroup0 {
-            hdr_render_target: &hdr_render_target_view,
+            hdr_render_target: hdr_render_target_view.get(),
             hdr_render_target_sampler: &hdr_render_target_sampler,
             tone_mapping_enabled: &tone_mapping_enabled_buffer,
             saturating_luminance: &saturating_luminance_buffer,
@@ -1019,15 +1029,8 @@ fn main() {
     let mut propagate_camera_updates = true;
 
     event_loop.run(move |event, _, control_flow| {
-        let depth_texture_descriptor = &mut depth_texture_descriptor;
         let depth_texture = &mut depth_texture;
         let depth_texture_view = &mut depth_texture_view;
-
-        let hdr_render_target_texture_descriptor = &mut hdr_render_target_texture_descriptor;
-        let hdr_render_target = &mut hdr_render_target;
-        let hdr_render_target_view = &mut hdr_render_target_view;
-
-        let num_pixels = &mut num_pixels;
 
         let egui_winit_state = &mut egui_winit_state;
         let screen_descriptor = &mut screen_descriptor;
@@ -1156,21 +1159,59 @@ fn main() {
                     });
                 }
 
-                surface_config.flush(&mut |surface_config| {
+                surface_config.react(&mut |surface_config| {
                     surface.configure(&device, surface_config);
 
-                    depth_texture_descriptor.size.width = surface_config.width;
-                    depth_texture_descriptor.size.height = surface_config.height;
-                    *depth_texture = device.create_texture(depth_texture_descriptor);
-                    *depth_texture_view = depth_texture.create_view(&depth_texture_view_descriptor);
+                    depth_texture_descriptor.modify_mut(&mut |depth_texture_descriptor| {
+                        depth_texture_descriptor.size.width = surface_config.width;
+                        depth_texture_descriptor.size.height = surface_config.height;
+                    });
 
-                    hdr_render_target_texture_descriptor.size.width = surface_config.width;
-                    hdr_render_target_texture_descriptor.size.height = surface_config.height;
-                    *hdr_render_target =
-                        device.create_texture(hdr_render_target_texture_descriptor);
-                    *hdr_render_target_view =
+                    hdr_render_target_texture_descriptor.modify_mut(
+                        &mut |hdr_render_target_texture_descriptor| {
+                            hdr_render_target_texture_descriptor.size.width = surface_config.width;
+                            hdr_render_target_texture_descriptor.size.height =
+                                surface_config.height;
+                        },
+                    );
+
+                    num_pixels.set(surface_config.width * surface_config.height);
+
+                    camera.modify_mut(&mut |camera| {
+                        camera.aspect = surface_config.width as f32 / surface_config.height as f32;
+                    });
+
+                    *egui_winit_state = egui_winit::State::new(&window);
+                    egui_winit_state.set_pixels_per_point(pixels_per_point);
+
+                    screen_descriptor.size_in_pixels[0] = surface_config.width;
+                    screen_descriptor.size_in_pixels[1] = surface_config.height;
+                });
+
+                depth_texture_descriptor.react(&mut |depth_texture_descriptor| {
+                    let value = device.create_texture(depth_texture_descriptor);
+                    depth_texture.set(value);
+                });
+
+                depth_texture.react(&mut |depth_texture| {
+                    let value = depth_texture.create_view(&depth_texture_view_descriptor);
+                    depth_texture_view.set(value);
+                });
+
+                hdr_render_target_texture_descriptor.react(
+                    &mut |hdr_render_target_texture_descriptor| {
+                        let value = device.create_texture(hdr_render_target_texture_descriptor);
+                        hdr_render_target.set(value);
+                    },
+                );
+
+                hdr_render_target.react(&mut |hdr_render_target| {
+                    let value =
                         hdr_render_target.create_view(&wgpu::TextureViewDescriptor::default());
+                    hdr_render_target_view.set(value);
+                });
 
+                hdr_render_target_view.react(&mut |hdr_render_target_view| {
                     luminance.set_bind_group_0(
                         &device,
                         luminance::BindGroup0 {
@@ -1194,23 +1235,14 @@ fn main() {
                             saturating_luminance: &saturating_luminance_buffer,
                         },
                     );
-
-                    *num_pixels = surface_config.width * surface_config.height;
-                    total_luminance_pixels_per_thread_buffer
-                        .update(&queue, total_luminance_pixels_per_thread(*num_pixels));
-
-                    camera.modify_mut(&mut |camera| {
-                        camera.aspect = surface_config.width as f32 / surface_config.height as f32;
-                    });
-
-                    *egui_winit_state = egui_winit::State::new(&window);
-                    egui_winit_state.set_pixels_per_point(pixels_per_point);
-
-                    screen_descriptor.size_in_pixels[0] = surface_config.width;
-                    screen_descriptor.size_in_pixels[1] = surface_config.height;
                 });
 
-                camera.flush(&mut |camera| {
+                num_pixels.react(&mut |num_pixels| {
+                    total_luminance_pixels_per_thread_buffer
+                        .update(&queue, total_luminance_pixels_per_thread(*num_pixels));
+                });
+
+                camera.react(&mut |camera| {
                     camera_buffer.update(&queue, camera.to_uniform());
 
                     if propagate_camera_updates {
@@ -1219,6 +1251,34 @@ fn main() {
                             camera_frustum_wireframe.model_matrix_id,
                             camera.view_matrix().inverse(),
                         );
+
+                        {
+                            let vertices: Vec<render_wireframe::VertexInput> = camera
+                                .frustum_camera_space()
+                                .wireframe_mesh()
+                                .into_iter()
+                                .flat_map(|(from, to)| {
+                                    [
+                                        render_wireframe::VertexInput {
+                                            position: from,
+                                            model_matrix_id: camera_frustum_wireframe
+                                                .model_matrix_id,
+                                        },
+                                        render_wireframe::VertexInput {
+                                            position: to,
+                                            model_matrix_id: camera_frustum_wireframe
+                                                .model_matrix_id,
+                                        },
+                                    ]
+                                    .into_iter()
+                                })
+                                .collect();
+                            render_wireframe_vertex_buffer.update_slice(
+                                &queue,
+                                camera_frustum_wireframe.vertex_buffer_offset,
+                                &vertices,
+                            );
+                        }
 
                         for directional_light in &directional_lights {
                             let aabb = fit_orthographic_projection_to_camera(
@@ -1257,40 +1317,45 @@ fn main() {
                             );
 
                             if let Some(wireframe) = &directional_light.wireframe {
-                                for (index, (from, to)) in
-                                    aabb.as_cuboid().wireframe_mesh().into_iter().enumerate()
-                                {
-                                    render_wireframe_vertex_buffer.update(
-                                        &queue,
-                                        wireframe.vertex_buffer_offset + 2 * index as u32,
-                                        render_wireframe::VertexInput {
-                                            position: from,
-                                            model_matrix_id: wireframe.model_matrix_id,
-                                        },
-                                    );
-                                    render_wireframe_vertex_buffer.update(
-                                        &queue,
-                                        wireframe.vertex_buffer_offset + 2 * index as u32 + 1,
-                                        render_wireframe::VertexInput {
-                                            position: to,
-                                            model_matrix_id: wireframe.model_matrix_id,
-                                        },
-                                    );
-                                }
+                                let vertices: Vec<render_wireframe::VertexInput> = aabb
+                                    .as_cuboid()
+                                    .wireframe_mesh()
+                                    .into_iter()
+                                    .flat_map(|(from, to)| {
+                                        [
+                                            render_wireframe::VertexInput {
+                                                position: from,
+                                                model_matrix_id: camera_frustum_wireframe
+                                                    .model_matrix_id,
+                                            },
+                                            render_wireframe::VertexInput {
+                                                position: to,
+                                                model_matrix_id: camera_frustum_wireframe
+                                                    .model_matrix_id,
+                                            },
+                                        ]
+                                        .into_iter()
+                                    })
+                                    .collect();
+                                render_wireframe_vertex_buffer.update_slice(
+                                    &queue,
+                                    wireframe.vertex_buffer_offset,
+                                    &vertices,
+                                );
                             }
                         }
                     }
                 });
 
-                display_normals.flush(&mut |display_normals| {
+                display_normals.react(&mut |display_normals| {
                     display_normals_buffer.update(&queue, *display_normals);
                 });
 
-                tone_mapping_enabled.flush(&mut |tone_mapping_enabled| {
+                tone_mapping_enabled.react(&mut |tone_mapping_enabled| {
                     tone_mapping_enabled_buffer.update(&queue, *tone_mapping_enabled);
                 });
 
-                show_directional_shadow_map_coverage.flush(
+                show_directional_shadow_map_coverage.react(
                     &mut |show_directional_shadow_map_coverage| {
                         show_directional_shadow_map_coverage_buffer
                             .update(&queue, *show_directional_shadow_map_coverage);
@@ -1314,12 +1379,12 @@ fn main() {
                         &vertex_buffer,
                     );
 
-                    render_sky.record(&mut command_encoder, hdr_render_target_view);
+                    render_sky.record(&mut command_encoder, hdr_render_target_view.get());
 
                     render_hdr.record(
                         &mut command_encoder,
-                        hdr_render_target_view,
-                        depth_texture_view,
+                        hdr_render_target_view.get(),
+                        depth_texture_view.get(),
                         &vertex_buffer,
                     );
 
@@ -1332,7 +1397,7 @@ fn main() {
                     render_wireframe.record(
                         &mut command_encoder,
                         &surface_texture_view,
-                        depth_texture_view,
+                        depth_texture_view.get(),
                         &render_wireframe_vertex_buffer,
                     );
 

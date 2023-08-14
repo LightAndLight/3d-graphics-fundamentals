@@ -4,6 +4,7 @@ pub mod clip;
 pub mod color;
 pub mod cuboid;
 pub mod gpu_buffer;
+pub mod gpu_flag;
 pub mod gpu_variable;
 pub mod light;
 pub mod load;

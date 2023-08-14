@@ -1,6 +1,7 @@
 use crate::{
     camera::CameraUniform,
     gpu_buffer::GpuBuffer,
+    gpu_flag::GpuFlag,
     gpu_variable::GpuVariable,
     light::{DirectionalLightGpu, PointLightGpu},
     material::Materials,
@@ -163,7 +164,7 @@ impl RenderHdr {
 pub struct BindGroup0<'a> {
     pub camera: &'a GpuVariable<CameraUniform>,
     pub model_matrices: &'a ModelMatrices,
-    pub display_normals: &'a GpuVariable<u32>,
+    pub display_normals: &'a GpuFlag,
     pub point_lights: &'a GpuBuffer<PointLightGpu>,
     pub directional_lights: &'a GpuBuffer<DirectionalLightGpu>,
     pub materials: &'a Materials,
@@ -445,7 +446,7 @@ impl<'a> BindGroup0<'a> {
 }
 
 pub struct BindGroup1<'a> {
-    pub show_directional_shadow_map_coverage: &'a GpuVariable<u32>,
+    pub show_directional_shadow_map_coverage: &'a GpuFlag,
 }
 
 impl<'a> BindGroup1<'a> {

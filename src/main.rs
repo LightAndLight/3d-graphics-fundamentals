@@ -13,6 +13,7 @@ use it::{
     color::Color,
     cuboid::Cuboid,
     gpu_buffer::GpuBuffer,
+    gpu_flag::GpuFlag,
     gpu_variable::GpuVariable,
     light::{
         DirectionalLight, DirectionalLightGpu, PointLight, PointLightGpu, PointLightShadowMapFace,
@@ -468,11 +469,11 @@ fn main() {
     );
 
     let mut display_normals = reactive::Var::new(false);
-    let mut display_normals_buffer = GpuVariable::new(
+    let mut display_normals_buffer = GpuFlag::new(
         &device,
         Some("display_normals"),
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        if *display_normals.get() { 1 } else { 0 } as u32,
+        *display_normals.get(),
     );
 
     let mut shadow_map_atlas =
@@ -849,15 +850,11 @@ fn main() {
     );
 
     let mut show_directional_shadow_map_coverage = reactive::Var::new(false);
-    let mut show_directional_shadow_map_coverage_buffer = GpuVariable::new(
+    let mut show_directional_shadow_map_coverage_buffer = GpuFlag::new(
         &device,
         Some("show_directional_shadow_map_coverage_buffer"),
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        if *show_directional_shadow_map_coverage.get() {
-            1
-        } else {
-            0
-        },
+        *show_directional_shadow_map_coverage.get(),
     );
 
     let render_hdr = RenderHdr::new(
@@ -952,11 +949,11 @@ fn main() {
     );
 
     let mut tone_mapping_enabled = reactive::Var::new(true);
-    let mut tone_mapping_enabled_buffer = GpuVariable::new(
+    let mut tone_mapping_enabled_buffer = GpuFlag::new(
         &device,
         Some("tone_mapping_enabled"),
         wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        if *tone_mapping_enabled.get() { 1 } else { 0 } as u32,
+        *tone_mapping_enabled.get(),
     );
 
     let mut tone_mapping = ToneMapping::new(
@@ -1285,25 +1282,17 @@ fn main() {
                 });
 
                 display_normals.flush(&mut |display_normals| {
-                    display_normals_buffer
-                        .update(&queue, if *display_normals { 1 } else { 0 } as u32);
+                    display_normals_buffer.update(&queue, *display_normals);
                 });
 
                 tone_mapping_enabled.flush(&mut |tone_mapping_enabled| {
-                    tone_mapping_enabled_buffer
-                        .update(&queue, if *tone_mapping_enabled { 1 } else { 0 } as u32);
+                    tone_mapping_enabled_buffer.update(&queue, *tone_mapping_enabled);
                 });
 
                 show_directional_shadow_map_coverage.flush(
                     &mut |show_directional_shadow_map_coverage| {
-                        show_directional_shadow_map_coverage_buffer.update(
-                            &queue,
-                            if *show_directional_shadow_map_coverage {
-                                1
-                            } else {
-                                0
-                            },
-                        );
+                        show_directional_shadow_map_coverage_buffer
+                            .update(&queue, *show_directional_shadow_map_coverage);
                     },
                 );
 

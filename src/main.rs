@@ -1029,6 +1029,8 @@ fn main() {
 
     let mut propagate_camera_updates = true;
 
+    let mut display_debug_wireframes = false;
+
     event_loop.run(move |event, _, control_flow| {
         let depth_texture = &mut depth_texture;
         let depth_texture_view = &mut depth_texture_view;
@@ -1247,13 +1249,13 @@ fn main() {
                     camera_buffer.update(&queue, camera.to_uniform());
 
                     if propagate_camera_updates {
-                        model_matrices.update(
-                            &queue,
-                            camera_frustum_wireframe.model_matrix_id,
-                            camera.view_matrix().inverse(),
-                        );
+                        if display_debug_wireframes {
+                            model_matrices.update(
+                                &queue,
+                                camera_frustum_wireframe.model_matrix_id,
+                                camera.view_matrix().inverse(),
+                            );
 
-                        {
                             let vertices: Vec<render_wireframe::VertexInput> = camera
                                 .frustum_camera_space()
                                 .wireframe_mesh()
@@ -1317,32 +1319,34 @@ fn main() {
                                 },
                             );
 
-                            if let Some(wireframe) = &directional_light.wireframe {
-                                let vertices: Vec<render_wireframe::VertexInput> = aabb
-                                    .as_cuboid()
-                                    .wireframe_mesh()
-                                    .into_iter()
-                                    .flat_map(|(from, to)| {
-                                        [
-                                            render_wireframe::VertexInput {
-                                                position: from,
-                                                model_matrix_id: camera_frustum_wireframe
-                                                    .model_matrix_id,
-                                            },
-                                            render_wireframe::VertexInput {
-                                                position: to,
-                                                model_matrix_id: camera_frustum_wireframe
-                                                    .model_matrix_id,
-                                            },
-                                        ]
+                            if display_debug_wireframes {
+                                if let Some(wireframe) = &directional_light.wireframe {
+                                    let vertices: Vec<render_wireframe::VertexInput> = aabb
+                                        .as_cuboid()
+                                        .wireframe_mesh()
                                         .into_iter()
-                                    })
-                                    .collect();
-                                render_wireframe_vertex_buffer.update_slice(
-                                    &queue,
-                                    wireframe.vertex_buffer_offset,
-                                    &vertices,
-                                );
+                                        .flat_map(|(from, to)| {
+                                            [
+                                                render_wireframe::VertexInput {
+                                                    position: from,
+                                                    model_matrix_id: camera_frustum_wireframe
+                                                        .model_matrix_id,
+                                                },
+                                                render_wireframe::VertexInput {
+                                                    position: to,
+                                                    model_matrix_id: camera_frustum_wireframe
+                                                        .model_matrix_id,
+                                                },
+                                            ]
+                                            .into_iter()
+                                        })
+                                        .collect();
+                                    render_wireframe_vertex_buffer.update_slice(
+                                        &queue,
+                                        wireframe.vertex_buffer_offset,
+                                        &vertices,
+                                    );
+                                }
                             }
                         }
                     }
@@ -1395,12 +1399,14 @@ fn main() {
 
                     tone_mapping.record(&mut command_encoder, &surface_texture_view);
 
-                    render_wireframe.record(
-                        &mut command_encoder,
-                        &surface_texture_view,
-                        depth_texture_view.get(),
-                        &render_wireframe_vertex_buffer,
-                    );
+                    if display_debug_wireframes {
+                        render_wireframe.record(
+                            &mut command_encoder,
+                            &surface_texture_view,
+                            depth_texture_view.get(),
+                            &render_wireframe_vertex_buffer,
+                        );
+                    }
 
                     render_egui.record(
                         &device,
@@ -1434,7 +1440,10 @@ fn main() {
                                 // Disable tone mapping when displaying normals.
                                 tone_mapping_enabled.set(!*display_normals_value);
                             }
+
                             ui.checkbox(&mut propagate_camera_updates, "Propagate camera updates");
+
+                            ui.checkbox(&mut display_debug_wireframes, "Display debug wireframes");
 
                             let (
                                 show_directional_shadow_map_coverage_value,

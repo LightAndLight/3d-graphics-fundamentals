@@ -443,6 +443,9 @@ fn main() {
         border_color: None,
     });
 
+    let min_far_plane = 1.0;
+    let max_far_plane = 100.0;
+
     let mut camera = reactive::Var::new(Camera {
         eye: Point3 {
             x: 0.0,
@@ -1455,6 +1458,18 @@ fn main() {
                                     "Show directional shadow map coverage",
                                 )
                                 .changed();
+
+                            ui.horizontal(|ui| {
+                                ui.label("Far plane");
+
+                                let (camera_value, camera_changed) = camera.as_components();
+                                *camera_changed = ui
+                                    .add(egui::Slider::new(
+                                        &mut camera_value.far,
+                                        min_far_plane..=max_far_plane,
+                                    ))
+                                    .changed();
+                            });
 
                             if ui.button("Exit").clicked() {
                                 *control_flow = ControlFlow::Exit;

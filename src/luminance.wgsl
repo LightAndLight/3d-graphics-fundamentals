@@ -19,19 +19,16 @@ var<storage, read_write> auto_EV100: f32;
 @group(0) @binding(6)
 var<storage, read_write> saturating_luminance: f32;
 
-// @group(1) @binding(0)
-// var ldr_render_target: texture_storage_2d<rgba8unorm, write>;
-
 const LUMINANCE_COEFFICIENTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
 
 @compute @workgroup_size(256)
 fn calculate_total_luminance_intermediate(
-  @builtin(local_invocation_id) local_id: vec3<u32>
+  @builtin(global_invocation_id) global_id: vec3<u32>,
 ) {
-  let hdr_render_target_dimensions = vec2<u32>(1918u, 2088u); // textureDimensions(hdr_render_target);
+  let hdr_render_target_dimensions = textureDimensions(hdr_render_target);
   let hdr_texels = hdr_render_target_dimensions.x * hdr_render_target_dimensions.y;
 
-  let starting_index: u32 = local_id.x * total_luminance_pixels_per_thread;
+  let starting_index: u32 = global_id.x * total_luminance_pixels_per_thread;
   
   var total = 0.0;
   for (var i: u32 = starting_index; i < starting_index + total_luminance_pixels_per_thread; i++) {
@@ -48,7 +45,7 @@ fn calculate_total_luminance_intermediate(
       total += dot(LUMINANCE_COEFFICIENTS, hdr_texel.rgb);
     }
   }
-  total_luminance_intermediate[local_id.x] = total;
+  total_luminance_intermediate[global_id.x] = total;
 }
 
 /* Recommended EV for a scene's average luminance.

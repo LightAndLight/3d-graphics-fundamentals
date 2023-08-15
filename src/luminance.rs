@@ -63,7 +63,7 @@ impl Luminance {
         compute_pass.set_pipeline(&self.calculate_total_luminance_intermediate_pipeline);
         // To dispatch a single workgroup, dispatch (1, 1, 1).
         // If any of the dispatch dimensions are zero then the pipeline won't run.
-        compute_pass.dispatch_workgroups(1, 1, 1);
+        compute_pass.dispatch_workgroups(256, 1, 1);
 
         compute_pass.set_pipeline(&self.calculate_average_luminance_pipeline);
         compute_pass.dispatch_workgroups(1, 1, 1);

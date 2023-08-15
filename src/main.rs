@@ -888,7 +888,8 @@ fn main() {
         },
     );
 
-    const TOTAL_LUMINANCE_THREADS: u32 = 256;
+    // workgroup size * dispatch size
+    const TOTAL_LUMINANCE_THREADS: u32 = 256 * 256;
     fn total_luminance_pixels_per_thread(num_pixels: u32) -> u32 {
         num_pixels / TOTAL_LUMINANCE_THREADS
             + if num_pixels % TOTAL_LUMINANCE_THREADS == 0 {

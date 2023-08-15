@@ -20,11 +20,12 @@ var<uniform> sky_intensity: f32;
 
 @vertex
 fn vertex_main(@location(0) position: vec2<f32>) -> VertexOutput {
-  let view_direction = camera.view_proj_inv * vec4<f32>(position, 1.0, 1.0);
+  let view_from = camera.view_proj_inv * vec4<f32>(0.0, 0.0, 0.0, 1.0);
+  let view_to = camera.view_proj_inv * vec4<f32>(position, 1.0, 1.0);
 
   var output: VertexOutput;
   output.position = vec4<f32>(position, 0.0, 1.0);
-  output.view_direction = view_direction.xyz - view_direction.w;
+  output.view_direction = (view_to.xyz / view_to.w) - (view_from.xyz / view_from.w);
   return output;
 }
 

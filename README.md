@@ -1,4 +1,4 @@
-# Realtime 3D Lighting Fundamentals
+# Realtime 3D Graphics Fundamentals
 
 <img src="./screenshot.png">
 

@@ -731,10 +731,11 @@ fn main() {
 
     {
         let direction = Vec3 {
-            x: 1.0,
+            x: -1.0,
             y: -1.0,
-            z: -0.2,
-        };
+            z: -1.5,
+        }
+        .normalize();
         let shadow_map_atlas_entry = shadow_map_atlas.allocate();
         let position = shadow_map_atlas_entry.position();
         let size = shadow_map_atlas_entry.size();

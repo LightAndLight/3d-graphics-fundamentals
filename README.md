@@ -2,6 +2,88 @@
 
 <img src="./screenshot.png">
 
+The intent behind this project was to use a 3D graphics API to render more than [just a
+triangle](https://vkguide.dev/docs/chapter_2), and learn some of the classic realistic
+realtime rendering techniques. The main features I ended up with are:
+
+* Physically-based shading
+* High-dynamic rendering with automatic exposure and tone mapping
+* Directional lights
+  * With a shadow map fitted to the view frustum
+* Point lights
+  * With omnidirectional shadow maps
+* HDRI skybox
+
+I'm very happy with the progress I made over the ~6 weeks I spent on this. I feel like I've broken
+through some conceptual barriers regarding computer graphics and graphics APIs. I'm better able to
+use the GPU as a creative tool because I'm more familiar with the computing platform it offers and
+the current 3D graphics API paradigm.
+
+## Issues / future work
+
+Learning more about computer graphics has meant realising that some of the
+fundamentals aren't enough for creating realistic / physically plausible images.
+I'm wrapping up this project because I feel like I've achieved everything I set out to,
+and that means leaving it with a bunch of issues I couldn't have anticipated
+when I started.
+
+### Shadows
+
+The most obvious issue in the screenshot is the directional light's shadow map resolution. The
+camera frustum is quite large which lowers the effective resolution of the shadow map, leading to
+very blocky shadows. Less obvious, but related, is extreme projective aliasing of shadows at
+glancing angles. For the screenshot I chose a far plane and light direction that made this issue
+less visible. Cascaded shadow maps seem like the next step toward improving the shadows. I'm also
+curious whether one can then go from cascades (subdividing the view frustum along the Z axis) to
+clusters (subdividing view frustum along X, Y, and Z, ala clustered shading) to get even more
+precise use of shadow map resolution.
+
+### Environment lighting
+
+The HDRI skybox doesn't actually cast light onto the scene.
+The black spheres are black because they aren't reflecting any of the sky's light.
+The shadows are pure black for the same reason. With that amount and colour of ambient light, the shadows
+should be lighter and tinted blue.
+
+I would try improve environment lighting by handling specular and diffuse reflections separately.
+The first step for specular reflections would be to reflect the skybox correctly. Each black sphere
+should become a metallic sky-reflecting ball. I think I can do that without bringing in any new
+concepts.
+Next is to have the rest of the scene contribute to specular reflections, which seems to be where
+the topic opens up. I think I'd start by playing with manually placed local reflection probes, and
+maybe screen space reflections.
+
+For diffuse environment reflections, I'd try creating an [irradiance
+map](https://learnopengl.com/PBR/IBL/Diffuse-irradiance) from the HDRI.
+Then I'd look to irradiance probes to capture how ambient light changes in response to the scene.
+They seem really complicated, though.
+
+### Test scenes
+
+I'd love to be able to render common test scenes, such as [Crytek's
+Sponza](https://www.cryengine.com/marketplace/product/crytek/sponza-sample-scene) ([super
+sponza?](https://www.intel.com/content/www/us/en/developer/topic-technology/graphics-research/samples.html))
+or the [Amazon Lumberyard bistro](https://developer.nvidia.com/orca/amazon-lumberyard-bistro). They
+seem like the easiest way to get a realistic realtime scene so that I can check the quality and
+efficiency of my rendering.
+
+## A note on code quality
+
+Since my goal was to learn realtime rendering, I chose to reduce my emphasis on writing good code. I
+felt that it would be too easy for me to get distracted by software architecture (something more
+familiar to me), at the expense of learning computer graphics. I biased toward repeating similar
+code and hard-coding things, rather than creating abstractions. As a result, I
+do not consider this code "production quality" - please keep that in mind if you read it.
+
+## The rest of this document 
+
+<!-- no toc -->
+* [Goals](#goals) - I tracked my feature progress here.
+* [Stretch goals](#stretch-goals) - Features that seemed cool but not "fundamental"; probably out of my reach this time around. 
+* [For fun](#for-fun) - Features and ideas that weren't important for getting the renderer working,
+  but seemed useful in a real world renderer, or just fun to build.
+* [Resources](#resources) - The reference materials I relied on to figure all this out.
+
 ## Goals
 
 * Remember GPU programming
@@ -47,11 +129,13 @@
 ## For fun
 
 * [ ] Parse-less on-disk model format with a program that converts to / from `.obj`
+  
+  To load meshes straight from `mmap`ped files.
+
 * [ ] Render the depth buffer on screen
 * Performance improvements
   * [ ] Indexed draws
 
-  To load meshes straight from `mmap`ped files.
 
 ## Resources
 

@@ -1,4 +1,6 @@
-# 2023-07-08 Realtime 3D Lighting Fundamentals
+# Realtime 3D Lighting Fundamentals
+
+<img src="./screenshot.png">
 
 ## Goals
 
@@ -28,7 +30,8 @@
   * [x] HDRI skybox
 * Use GPU-driven techniques as much as possible
   * [x] Per-object transformation matrices stored in a single GPU buffer
-  * [ ] `draw_indirect`
+* [x] [`egui`](https://github.com/emilk/egui#-egui-an-easy-to-use-gui-in-pure-rust) integration
+* [x] Auto-resize screen
 
 ## Stretch goals
 
@@ -39,6 +42,7 @@
 * [ ] Histogram-based auto-exposure
 * [ ] Parallax occlusion mapping
 * [ ] Virtual/adaptive shadow maps
+* [ ] `draw_indirect`
 
 ## For fun
 
